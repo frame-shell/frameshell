@@ -1,4 +1,6 @@
-# roxy-dots
+<p align="center">
+  <img src=".github/banner.svg" alt="roxy-dots" width="100%">
+</p>
 
 My personal dotfiles for **CachyOS + Hyprland + Quickshell**.
 Dark navy blue, custom shell, everything built by hand.
