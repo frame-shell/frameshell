@@ -132,7 +132,6 @@ and switch back (Ctrl+Alt+F1 or F2). The new lockscreen takes over and unlocks n
 | Zed | Super+Shift+E | theme, AI off, file tree on the left (Ctrl+B hides it, Ctrl+Shift+E focuses it), fish in the terminal panel (Ctrl+J), no sign-in or telemetry, default for text files |
 | Zen | Super+B | accent, dark mode and square corners in `user.js`, theme `userChrome.css`, default browser |
 
-SFTP in Dolphin: type `sftp://user@host/path` into the address bar; right-click the
-sidebar → **Add Entry** keeps the server there. Dolphin, Zed and Zen ask before they become
+Dolphin, Zed and Zen ask before they become
 default apps. Zed's `settings.json` is linked from the repo, so changes made in Zed end up
 in `~/frameshell/zed`.
