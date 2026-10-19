@@ -38,7 +38,7 @@
     <rect width="1280" height="360" fill="url(#glow)"/>
     <rect width="1280" height="360" fill="url(#dots)" mask="url(#dotMask)"/>
 
-    <!-- Wassermagie: Wellen, Tropfen, Spritzer -->
+    <!-- Water magic: ripples, drop, splashes -->
     <g fill="none" stroke="#8fb0f0" stroke-width="2">
       <ellipse cx="1030" cy="262" rx="70" ry="16" stroke-opacity="0.55"/>
       <ellipse cx="1030" cy="262" rx="135" ry="31" stroke-opacity="0.32"/>
@@ -54,7 +54,7 @@
       <circle cx="948" cy="252" r="2.5" fill-opacity="0.4"/>
     </g>
 
-    <!-- Funkeln -->
+    <!-- Sparkles -->
     <g fill="#dce6ff">
       <path d="M1170 56 Q1170 70 1184 70 Q1170 70 1170 84 Q1170 70 1156 70 Q1170 70 1170 56 Z" fill-opacity="0.9"/>
       <path d="M900 80 Q900 90 910 90 Q900 90 900 100 Q900 90 890 90 Q900 90 900 80 Z" fill-opacity="0.75"/>
@@ -63,7 +63,7 @@
       <path d="M1128 126 Q1128 131 1133 131 Q1128 131 1128 136 Q1128 131 1123 131 Q1128 131 1128 126 Z" fill-opacity="0.55"/>
     </g>
 
-    <!-- Schriftzug: von Hand aus Linien gebaut, keine Schrift nötig -->
+    <!-- Wordmark: hand-built from strokes, no font needed -->
     <g transform="translate(9 34) scale(0.62)" fill="none" stroke-width="20" stroke-linecap="round" stroke-linejoin="round">
       <g stroke="#dce6ff">
         <path d="M150 120 V230 M150 172 A52 52 0 0 1 202 120"/>
@@ -80,7 +80,7 @@
         <path d="M1206 136 C1198 124 1186 120 1168 120 C1146 120 1132 132 1132 148 C1132 166 1148 171 1168 175 C1190 179 1206 186 1206 203 C1206 220 1190 230 1168 230 C1148 230 1134 224 1128 212"/>
       </g>
 
-      <!-- Hexenhut auf dem r -->
+      <!-- Witch hat on the r -->
       <g stroke="none" transform="translate(176 106) scale(1.25) translate(-176 -106)">
         <path d="M146 104 C160 80 170 58 184 44 C196 32 214 26 238 28 C218 38 208 52 204 70 C201 82 202 92 206 98 Z" fill="url(#hat)"/>
         <path d="M151 95 Q178 89 205 87" fill="none" stroke="#0a0f1f" stroke-width="8" stroke-opacity="0.55"/>
@@ -90,7 +90,7 @@
 
     <text x="104" y="262" fill="#7a89b3" font-family="Lexend, 'Segoe UI', Inter, system-ui, sans-serif" font-size="19" font-weight="500" letter-spacing="4">CACHYOS · HYPRLAND · QUICKSHELL</text>
 
-    <!-- Palette als Punkte -->
+    <!-- Palette as dots -->
     <g stroke="#dce6ff" stroke-opacity="0.18" stroke-width="1.5">
       <circle cx="111" cy="300" r="7" fill="#0a0f1f"/>
       <circle cx="137" cy="300" r="7" fill="#111833"/>

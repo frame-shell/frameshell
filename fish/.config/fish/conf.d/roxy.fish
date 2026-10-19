@@ -1,5 +1,5 @@
-# Roxy Dark – Syntaxfarben für fish und Starship-Prompt
-# Liegt in conf.d, damit die config.fish von CachyOS unangetastet bleibt.
+# Roxy Dark – fish syntax colors and Starship prompt
+# Lives in conf.d so CachyOS's own config.fish stays untouched.
 
 status is-interactive; or return
 
@@ -29,4 +29,9 @@ set -g fish_pager_color_selected_background --background=1a2447
 
 if type -q starship
     starship init fish | source
+end
+
+# Greeting: fastfetch with the Roxy logo (~/.config/fastfetch/config.jsonc)
+function fish_greeting
+    type -q fastfetch; and fastfetch
 end

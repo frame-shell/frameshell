@@ -1,0 +1,351 @@
+#!/usr/bin/env bash
+# roxy – install and manage roxy-dots
+#
+#   roxy install [package...]   install dependencies and link configs (default: all)
+#   roxy remove  <package...>   unlink configs (dependencies stay installed)
+#   roxy update                 git pull, then relink everything already linked
+#   roxy status                 show what is linked and what is missing
+#
+# Options: -n/--dry-run (print what would happen), -y/--yes (no questions)
+
+set -euo pipefail
+
+REPO="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
+STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/roxy-dots"
+
+PACKAGES=(ghostty fish starship fastfetch spicetify)
+
+# Distro packages each config needs; AUR ones go through paru/yay
+declare -A DEPS=(
+  [ghostty]="ghostty"
+  [fish]="fish"
+  [starship]="starship"
+  [fastfetch]="fastfetch chafa"
+  [spicetify]="spicetify-cli"
+)
+
+DRY_RUN=0
+ASSUME_YES=0
+
+# ── Output ───────────────────────────────────────────────────
+
+if [[ -t 1 ]]; then
+  c_text=$'\e[38;2;220;230;255m'
+  c_primary=$'\e[38;2;74;127;224m'
+  c_secondary=$'\e[38;2;143;176;240m'
+  c_muted=$'\e[38;2;122;137;179m'
+  c_ok=$'\e[38;2;110;224;182m'
+  c_warn=$'\e[38;2;242;201;125m'
+  c_danger=$'\e[38;2;255;107;138m'
+  c_bold=$'\e[1m'
+  c_reset=$'\e[0m'
+else
+  c_text='' c_primary='' c_secondary='' c_muted='' c_ok='' c_warn='' c_danger='' c_bold='' c_reset=''
+fi
+
+header() {
+  printf '\n  %s%sroxy%s%s-%s%s%sdots%s  %sCachyOS · Hyprland · Quickshell%s\n\n' \
+    "$c_bold" "$c_text" "$c_reset" "$c_primary" "$c_reset" "$c_bold" "$c_secondary" "$c_reset" "$c_muted" "$c_reset"
+}
+
+step() { printf '\n%s●%s %s%s%s\n' "$c_primary" "$c_reset" "$c_bold" "$*" "$c_reset"; }
+info() { printf '  %s%s%s\n' "$c_muted" "$*" "$c_reset"; }
+ok()   { printf '  %s✓%s %s\n' "$c_ok" "$c_reset" "$*"; }
+warn() { printf '  %s!%s %s\n' "$c_warn" "$c_reset" "$*"; }
+die()  { printf '%s✗%s %s\n' "$c_danger" "$c_reset" "$*" >&2; exit 1; }
+
+# Runs a command, or only prints it in dry-run mode
+run() {
+  if ((DRY_RUN)); then
+    printf '  %swould run:%s %s\n' "$c_muted" "$c_reset" "$*"
+    return 0
+  fi
+  "$@"
+}
+
+confirm() {
+  ((ASSUME_YES)) && return 0
+  local answer
+  read -r -p "  $1 [Y/n] " answer
+  [[ -z $answer || $answer =~ ^[YyJj] ]]
+}
+
+usage() {
+  header
+  cat <<EOF
+  ${c_bold}Usage${c_reset}  roxy <command> [package...] [options]
+
+  ${c_bold}Commands${c_reset}
+    install [pkg...]   install dependencies and link configs (default: all)
+    remove  <pkg...>   unlink configs, dependencies stay installed
+    update             git pull, then relink everything already linked
+    status             show what is linked and what is missing
+
+  ${c_bold}Options${c_reset}
+    -n, --dry-run      print what would happen, change nothing
+    -y, --yes          do not ask for confirmation
+
+  ${c_bold}Packages${c_reset}  ${PACKAGES[*]}
+
+EOF
+}
+
+# ── Helpers ──────────────────────────────────────────────────
+
+is_package() {
+  local p
+  for p in "${PACKAGES[@]}"; do [[ $p == "$1" ]] && return 0; done
+  return 1
+}
+
+need_arch() {
+  command -v pacman >/dev/null || die "roxy needs an Arch-based system (pacman not found)."
+}
+
+has_pkg() {
+  command -v pacman >/dev/null && pacman -Qq "$1" &>/dev/null
+}
+
+aur_helper() {
+  local h
+  for h in paru yay; do
+    command -v "$h" >/dev/null && { echo "$h"; return 0; }
+  done
+  return 0
+}
+
+install_deps() {
+  local missing=() p helper
+  for p in "$@"; do has_pkg "$p" || missing+=("$p"); done
+  if ((${#missing[@]} == 0)); then
+    ok "All dependencies already installed"
+    return 0
+  fi
+  info "Missing: ${missing[*]}"
+
+  local noconfirm=()
+  ((ASSUME_YES)) && noconfirm=(--noconfirm)
+  helper="$(aur_helper)"
+  if [[ -n $helper ]]; then
+    run "$helper" -S --needed "${noconfirm[@]}" "${missing[@]}"
+  else
+    warn "No AUR helper (paru/yay) found, AUR packages like spicetify-cli will fail"
+    run sudo pacman -S --needed "${noconfirm[@]}" "${missing[@]}"
+  fi
+}
+
+# Files of a package, relative to the package root (= relative to $HOME)
+pkg_files() {
+  (cd "$REPO/$1" && find . \( -type f -o -type l \) | sed 's|^\./||' | sort)
+}
+
+# Prints linked, partial or missing
+link_state() {
+  local pkg=$1 f total=0 linked=0
+  while IFS= read -r f; do
+    total=$((total + 1))
+    if [[ -L $HOME/$f && "$(readlink -f "$HOME/$f")" == "$REPO/$pkg/$f" ]]; then
+      linked=$((linked + 1))
+    fi
+  done < <(pkg_files "$pkg")
+  if ((total > 0 && linked == total)); then echo linked
+  elif ((linked > 0)); then echo partial
+  else echo missing
+  fi
+}
+
+# Moves existing files that would block stow into the backup folder
+backup_conflicts() {
+  local pkg=$1 dest=$2 f target
+  while IFS= read -r f; do
+    target="$HOME/$f"
+    [[ -e $target || -L $target ]] || continue
+    [[ "$(readlink -f "$target")" == "$REPO/$pkg/$f" ]] && continue
+    warn "Backing up existing ~/$f"
+    run mkdir -p "$dest/$(dirname "$f")"
+    run mv "$target" "$dest/$f"
+  done < <(pkg_files "$pkg")
+}
+
+# --no-folding links single files, so apps never write into the repo
+stow_pkg() {
+  run stow --no-folding -d "$REPO" -t "$HOME" "$@"
+}
+
+link_self() {
+  local bin="$HOME/.local/bin/roxy"
+  [[ "$(readlink -f "$bin" 2>/dev/null)" == "$REPO/roxy" ]] && return 0
+  run mkdir -p "$HOME/.local/bin"
+  run ln -sf "$REPO/roxy" "$bin"
+  ok "roxy is now available as a command (~/.local/bin/roxy)"
+}
+
+# ── Per-package follow-up steps ──────────────────────────────
+
+post_fish() {
+  if [[ ${SHELL##*/} != fish ]]; then
+    info "fish is not your login shell. To change it: chsh -s $(command -v fish || echo /usr/bin/fish)"
+  fi
+}
+
+post_fastfetch() {
+  if [[ ! -f $REPO/assets/roxy.png ]]; then
+    warn "No logo at assets/roxy.png, fastfetch shows the distro logo instead"
+    info "Put a PNG of your choice there (the folder is git-ignored)"
+  fi
+}
+
+post_spicetify() {
+  if ! command -v spicetify >/dev/null && ((!DRY_RUN)); then
+    warn "spicetify not found, skipping theme activation"
+    return 0
+  fi
+  run spicetify config current_theme Roxy color_scheme Roxy
+
+  # The very first run needs a backup of the untouched Spotify files
+  local marker="$STATE_DIR/spicetify-backup"
+  local action=(apply)
+  [[ -f $marker ]] || action=(backup apply)
+  if run spicetify "${action[@]}"; then
+    run mkdir -p "$STATE_DIR"
+    run touch "$marker"
+    ok "Spotify theme applied"
+  else
+    warn "spicetify failed. Open Spotify once, log in, then run: roxy install spicetify"
+    info "Spotify from the AUR may need write access: https://spicetify.app/docs/advanced-usage/installation#spotify-installed-from-aur"
+  fi
+}
+
+# ── Commands ─────────────────────────────────────────────────
+
+cmd_install() {
+  need_arch
+  local pkgs=("$@") p
+  ((${#pkgs[@]})) || pkgs=("${PACKAGES[@]}")
+
+  header
+  info "Packages: ${pkgs[*]}"
+  ((DRY_RUN)) && info "Dry run, nothing will be changed"
+  confirm "Install and link these?" || exit 0
+
+  local deps=(stow) d
+  for p in "${pkgs[@]}"; do
+    read -ra d <<<"${DEPS[$p]}"
+    deps+=("${d[@]}")
+  done
+  step "Dependencies"
+  install_deps "${deps[@]}"
+
+  local backup
+  backup="$STATE_DIR/backup/$(date +%Y%m%d-%H%M%S)"
+  for p in "${pkgs[@]}"; do
+    step "$p"
+    backup_conflicts "$p" "$backup"
+    stow_pkg -R "$p"
+    ok "Config linked"
+    if declare -F "post_$p" >/dev/null; then "post_$p"; fi
+  done
+
+  step "roxy command"
+  link_self
+  [[ -d $backup ]] && info "Old configs were moved to $backup"
+  printf '\n%sDone.%s Open a new terminal to see the changes.\n\n' "$c_ok" "$c_reset"
+}
+
+cmd_remove() {
+  (($#)) || die "Name the packages to remove, e.g.: roxy remove spicetify"
+  command -v stow >/dev/null || ((DRY_RUN)) || die "stow is not installed"
+  local p
+  for p in "$@"; do
+    step "$p"
+    stow_pkg -D "$p"
+    ok "Config unlinked"
+  done
+  info "Backups of your old configs are in $STATE_DIR/backup/"
+}
+
+cmd_update() {
+  need_arch
+  step "Pulling latest changes"
+  run git -C "$REPO" pull --ff-only
+  local p
+  for p in "${PACKAGES[@]}"; do
+    [[ $(link_state "$p") == missing ]] && continue
+    step "$p"
+    stow_pkg -R "$p"
+    ok "Relinked"
+    if declare -F "post_$p" >/dev/null; then "post_$p"; fi
+  done
+}
+
+cmd_status() {
+  header
+  printf '  %s%-12s %-10s %s%s\n' "$c_muted" "PACKAGE" "CONFIG" "DEPENDENCIES" "$c_reset"
+  local p state d missing color
+  for p in "${PACKAGES[@]}"; do
+    state=$(link_state "$p")
+    missing=()
+    for d in ${DEPS[$p]}; do has_pkg "$d" || missing+=("$d"); done
+    case $state in
+      linked) color=$c_ok ;;
+      partial) color=$c_warn ;;
+      *) color=$c_muted ;;
+    esac
+    if ((${#missing[@]})); then
+      printf '  %-12s %s%-10s%s %smissing: %s%s\n' "$p" "$color" "$state" "$c_reset" "$c_danger" "${missing[*]}" "$c_reset"
+    else
+      printf '  %-12s %s%-10s%s %sok%s\n' "$p" "$color" "$state" "$c_reset" "$c_ok" "$c_reset"
+    fi
+  done
+
+  step "Checks"
+  command -v pacman >/dev/null || warn "pacman not found, dependency checks are skipped"
+  command -v stow >/dev/null && ok "stow installed" || warn "stow missing (roxy install takes care of it)"
+
+  if command -v fc-list >/dev/null; then
+    fc-list | grep -qi "lexend" && ok "Font Lexend installed" \
+      || warn "Font Lexend missing, the Spotify theme falls back to Inter/system font"
+  fi
+
+  [[ -f $REPO/assets/roxy.png ]] && ok "fastfetch logo found" \
+    || warn "No fastfetch logo at assets/roxy.png"
+
+  command -v spotify >/dev/null || command -v spotify-launcher >/dev/null \
+    || warn "Spotify not found, the spicetify theme needs it"
+
+  if grep -qs fastfetch /usr/share/cachyos-fish-config/cachyos-config.fish; then
+    warn "CachyOS's fish config runs fastfetch too, you may see it twice"
+    info "Fix: remove the cachyos-config line in ~/.config/fish/config.fish, or keep theirs and drop fish_greeting in conf.d/roxy.fish"
+  fi
+
+  [[ :$PATH: == *":$HOME/.local/bin:"* ]] || warn "~/.local/bin is not in PATH, the roxy command will not be found"
+  echo
+}
+
+# ── Main ─────────────────────────────────────────────────────
+
+main() {
+  local cmd=help args=()
+  if (($#)); then cmd=$1; shift; fi
+  while (($#)); do
+    case $1 in
+      -n | --dry-run) DRY_RUN=1 ;;
+      -y | --yes) ASSUME_YES=1 ;;
+      -h | --help) cmd=help ;;
+      -*) die "Unknown option: $1" ;;
+      *) is_package "$1" || die "Unknown package: $1 (available: ${PACKAGES[*]})"; args+=("$1") ;;
+    esac
+    shift
+  done
+
+  case $cmd in
+    install | i) cmd_install "${args[@]}" ;;
+    remove | rm | uninstall) cmd_remove "${args[@]}" ;;
+    update | up) cmd_update ;;
+    status | st | doctor) cmd_status ;;
+    help | -h | --help) usage ;;
+    *) die "Unknown command: $cmd (try: roxy help)" ;;
+  esac
+}
+
+main "$@"

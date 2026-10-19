@@ -10,7 +10,7 @@ window-padding-y = 12
 window-padding-balance = true
 window-decoration = none
 
-# Hyprland macht den Blur, Ghostty nur die Transparenz
+# Hyprland does the blur, Ghostty only the transparency
 background-opacity = 0.92
 unfocused-split-opacity = 0.85
 

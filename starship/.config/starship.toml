@@ -1,8 +1,10 @@
 "$schema" = "https://starship.rs/config-schema.json"
 
-# Roxy Dark – zwei runde „Pillen" (Ordner, Git) wie die Chips im Theme,
-# rechts Laufzeit und Uhrzeit, darunter der Eingabepfeil.
-# Die Symbole sind Nerd-Font-Zeichen; Ghostty bringt sie mit.
+# Roxy Dark prompt
+# Left: directory pill and git pill. Right: one small pill per detected
+# language/tool (only shown inside matching projects), then duration and
+# clock. Input arrow on the second line.
+# Symbols are Nerd Font glyphs; Ghostty ships them built in.
 
 palette = "roxy"
 add_newline = true
@@ -10,8 +12,37 @@ add_newline = true
 format = """
 $directory\
 $git_branch\
+$git_commit\
+$git_state\
+$git_metrics\
 $git_status\
 $fill\
+$python\
+$conda\
+$nodejs\
+$bun\
+$deno\
+$java\
+$kotlin\
+$scala\
+$gradle\
+$c\
+$cpp\
+$cmake\
+$rust\
+$golang\
+$zig\
+$dotnet\
+$php\
+$ruby\
+$lua\
+$swift\
+$dart\
+$haskell\
+$elixir\
+$package\
+$docker_context\
+$nix_shell\
 $cmd_duration\
 $time\
 $line_break\
@@ -26,6 +57,10 @@ secondary = "#8fb0f0"
 text = "#dce6ff"
 muted = "#7a89b3"
 danger = "#ff6b8a"
+green = "#6ee0b6"
+yellow = "#f2c97d"
+
+# ── Left side ────────────────────────────────────────────────
 
 [directory]
 style = "bold fg:secondary bg:surface2"
@@ -35,12 +70,29 @@ read_only_style = "fg:danger bg:surface2"
 truncation_length = 3
 truncation_symbol = "…/"
 
+# Git pill: branch opens it, git_status closes it (also when clean)
 [git_branch]
 symbol = ""
 style = "fg:primary bg:surface"
 format = " [](fg:surface)[ $symbol $branch ]($style)"
 
-# Schließt die Git-Pille ab, auch wenn alles sauber ist
+# Only shown on a detached HEAD
+[git_commit]
+style = "fg:yellow bg:surface"
+format = "[ $hash$tag ]($style)"
+tag_symbol = "  "
+
+# Rebase, merge, cherry-pick … with progress
+[git_state]
+style = "fg:yellow bg:surface"
+format = "[$state( $progress_current/$progress_total) ]($style)"
+
+[git_metrics]
+disabled = false
+added_style = "fg:green bg:surface"
+deleted_style = "fg:danger bg:surface"
+format = "([+$added ]($added_style))([-$deleted ]($deleted_style))"
+
 [git_status]
 style = "fg:muted bg:surface"
 format = "[($all_status$ahead_behind )]($style)[](fg:surface)"
@@ -48,16 +100,155 @@ format = "[($all_status$ahead_behind )]($style)[](fg:surface)"
 [fill]
 symbol = " "
 
+# ── Right side: languages and tools ──────────────────────────
+# Every module uses the same small pill: surface2 caps, secondary text.
+
+[python]
+symbol = ""
+style = "fg:secondary bg:surface2"
+format = " [](fg:surface2)[$symbol $version( \\($virtualenv\\))]($style)[](fg:surface2)"
+
+[conda]
+symbol = " conda"
+style = "fg:secondary bg:surface2"
+format = " [](fg:surface2)[$symbol $environment]($style)[](fg:surface2)"
+ignore_base = true
+
+[nodejs]
+symbol = ""
+style = "fg:secondary bg:surface2"
+format = " [](fg:surface2)[$symbol $version]($style)[](fg:surface2)"
+
+[bun]
+symbol = "bun"
+style = "fg:secondary bg:surface2"
+format = " [](fg:surface2)[$symbol $version]($style)[](fg:surface2)"
+
+[deno]
+symbol = "deno"
+style = "fg:secondary bg:surface2"
+format = " [](fg:surface2)[$symbol $version]($style)[](fg:surface2)"
+
+[java]
+symbol = ""
+style = "fg:secondary bg:surface2"
+format = " [](fg:surface2)[$symbol $version]($style)[](fg:surface2)"
+
+[kotlin]
+symbol = ""
+style = "fg:secondary bg:surface2"
+format = " [](fg:surface2)[$symbol $version]($style)[](fg:surface2)"
+
+[scala]
+symbol = ""
+style = "fg:secondary bg:surface2"
+format = " [](fg:surface2)[$symbol $version]($style)[](fg:surface2)"
+
+[gradle]
+symbol = "gradle"
+style = "fg:secondary bg:surface2"
+format = " [](fg:surface2)[$symbol $version]($style)[](fg:surface2)"
+
+[c]
+symbol = ""
+style = "fg:secondary bg:surface2"
+format = " [](fg:surface2)[$symbol $version]($style)[](fg:surface2)"
+
+# Off by default in Starship
+[cpp]
+disabled = false
+symbol = ""
+style = "fg:secondary bg:surface2"
+format = " [](fg:surface2)[$symbol $version]($style)[](fg:surface2)"
+
+[cmake]
+symbol = "cmake"
+style = "fg:secondary bg:surface2"
+format = " [](fg:surface2)[$symbol $version]($style)[](fg:surface2)"
+
+[rust]
+symbol = ""
+style = "fg:secondary bg:surface2"
+format = " [](fg:surface2)[$symbol $version]($style)[](fg:surface2)"
+
+[golang]
+symbol = ""
+style = "fg:secondary bg:surface2"
+format = " [](fg:surface2)[$symbol $version]($style)[](fg:surface2)"
+
+[zig]
+symbol = ""
+style = "fg:secondary bg:surface2"
+format = " [](fg:surface2)[$symbol $version]($style)[](fg:surface2)"
+
+[dotnet]
+symbol = ""
+style = "fg:secondary bg:surface2"
+format = " [](fg:surface2)[$symbol $version(  $tfm)]($style)[](fg:surface2)"
+
+[php]
+symbol = ""
+style = "fg:secondary bg:surface2"
+format = " [](fg:surface2)[$symbol $version]($style)[](fg:surface2)"
+
+[ruby]
+symbol = ""
+style = "fg:secondary bg:surface2"
+format = " [](fg:surface2)[$symbol $version]($style)[](fg:surface2)"
+
+[lua]
+symbol = ""
+style = "fg:secondary bg:surface2"
+format = " [](fg:surface2)[$symbol $version]($style)[](fg:surface2)"
+
+[swift]
+symbol = ""
+style = "fg:secondary bg:surface2"
+format = " [](fg:surface2)[$symbol $version]($style)[](fg:surface2)"
+
+[dart]
+symbol = ""
+style = "fg:secondary bg:surface2"
+format = " [](fg:surface2)[$symbol $version]($style)[](fg:surface2)"
+
+[haskell]
+symbol = ""
+style = "fg:secondary bg:surface2"
+format = " [](fg:surface2)[$symbol $version]($style)[](fg:surface2)"
+
+[elixir]
+symbol = ""
+style = "fg:secondary bg:surface2"
+format = " [](fg:surface2)[$symbol $version]($style)[](fg:surface2)"
+
+# Version from package.json, Cargo.toml, pyproject.toml …
+[package]
+symbol = ""
+style = "fg:muted bg:surface2"
+format = " [](fg:surface2)[$symbol $version]($style)[](fg:surface2)"
+
+[docker_context]
+symbol = ""
+style = "fg:secondary bg:surface2"
+format = " [](fg:surface2)[$symbol $context]($style)[](fg:surface2)"
+
+[nix_shell]
+symbol = ""
+style = "fg:secondary bg:surface2"
+format = " [](fg:surface2)[$symbol $state( $name)]($style)[](fg:surface2)"
+
+# ── Duration, clock, input ───────────────────────────────────
+
 [cmd_duration]
 min_time = 2000
 style = "fg:muted"
-format = "[ $duration  ]($style)"
+format = "  [ $duration]($style)"
 
 [time]
 disabled = false
 time_format = "%H:%M"
 style = "fg:muted"
-format = "[$time]($style)"
+format = "  [$time]($style)"
 
 [character]
 success_symbol = "[❯](bold primary)"

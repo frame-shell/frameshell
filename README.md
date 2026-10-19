@@ -20,7 +20,8 @@ Dark navy blue, custom shell, everything built by hand.
 | Spotify | Spicetify with the Roxy theme |
 | Terminal | Ghostty |
 | Terminal shell | fish + Starship |
-| Dotfile management | GNU Stow |
+| System info | fastfetch with your own image as ASCII logo |
+| Dotfile management | GNU Stow via the `roxy` CLI |
 
 ## Planned features
 
@@ -34,7 +35,7 @@ Dark navy blue, custom shell, everything built by hand.
 - [ ] Infinite-canvas workflow
 - [ ] Vencord theme generated from the same color palette (based on system24 theme)
 - [ ] Spotify theme (Spicetify): borderless cover tiles, icon rail, queue as a table, floating player bar
-- [ ] Ghostty, fish and Starship in Roxy colors
+- [ ] Ghostty, fish, Starship and fastfetch in Roxy colors
 - [ ] Hotkey overlay (holding Super highlights bound keys), later on keyboard LEDs
 - [ ] Multi-theme switcher
 
@@ -71,9 +72,11 @@ roxy-dots/
 │   ├── notifications/ # Notification daemon
 │   ├── launcher/      # App launcher
 │   └── lockscreen/
+├── roxy               # CLI: install, remove, update, status
 ├── ghostty/           # Terminal config + Roxy color theme
-├── fish/              # conf.d/roxy.fish: syntax colors, starts Starship
-├── starship/          # Prompt
+├── fish/              # conf.d/roxy.fish: syntax colors, Starship, fastfetch greeting
+├── starship/          # Prompt with git and language pills
+├── fastfetch/         # System info, logo from assets/roxy.png
 ├── spicetify/         # Spotify theme (color.ini + user.css)
 ├── themes/            # Color palettes (roxy.json, ...)
 ├── scripts/           # Theme generator and helpers
@@ -85,28 +88,33 @@ roxy-dots/
 
 ## Installation
 
-Not finished yet. Instructions will be added once the base setup is done.
-
-Rough steps:
-
 ```bash
 git clone git@github.com:vxnsin/roxy-dots.git ~/roxy-dots
-cd ~/roxy-dots
-stow ghostty fish starship spicetify   # symlinks the configs into ~/.config
+~/roxy-dots/roxy install
 ```
 
-Each package folder mirrors your home directory (`ghostty/.config/ghostty/...`),
-so `stow` run from `~/roxy-dots` links everything to the right place.
-
-Activate the Spotify theme:
+`roxy install` installs the missing packages (through `paru`/`yay`), moves existing
+configs to `~/.local/state/roxy-dots/backup/`, links the configs with GNU Stow, applies
+the Spotify theme and puts `roxy` into `~/.local/bin`.
 
 ```bash
-spicetify config current_theme Roxy color_scheme Roxy
-spicetify apply
+roxy status                 # what is linked, what is missing
+roxy install starship fish  # only some packages
+roxy install --dry-run      # show what would happen
+roxy update                 # git pull + relink
+roxy remove spicetify       # unlink a package
 ```
 
-Requirements: `quickshell`, `hyprland`, `goxlr-utility`, `vesktop`, `stow`,
-`ghostty`, `fish`, `starship`, `spicetify-cli`, fonts JetBrains Mono and Lexend.
+Packages: `ghostty`, `fish`, `starship`, `fastfetch`, `spicetify`.
+Each package folder mirrors the home directory (`ghostty/.config/ghostty/...`).
+
+Manual steps:
+
+- **fastfetch logo:** put any PNG at `assets/roxy.png`; fastfetch renders it as ASCII art.
+- **Spotify:** install and open Spotify once before `roxy install spicetify`.
+- **Fonts:** JetBrains Mono (built into Ghostty) and Lexend for the Spotify theme.
+
+Not covered by `roxy` yet: `quickshell`, `hyprland`, `goxlr-utility`, `vesktop`.
 
 ## Note on assets
 
