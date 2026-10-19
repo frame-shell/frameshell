@@ -37,19 +37,22 @@ frame restore latest         # put the newest one back
 frame theme list             # themes; frame theme set <name> switches
 frame grub                   # theme the GRUB boot menu (sudo)
 frame grub remove            # switch it off again
-frame login                  # the lockscreen as the login screen (greetd, sudo)
+frame login                  # the lockscreen look as the login screen (greetd, sudo)
 frame login remove           # back to the greeter
 frame wallpaper backend mpv  # wallpaper backend: both, mpv or image
 frame spotify login          # Spotify Web API for the launcher, see spotify.md
 frame layout canvas          # infinite canvas; frame layout tiling goes back
 ```
 
-`frame login` is for one person on one machine: greetd gets an `initial_session` that
-starts Hyprland for you at boot, and the shell locks the session the moment it is up, so
-the first thing on screen is the frameshell lockscreen with your password field. The
-distro's greeter stays as `default_session` (the fallback when a session ends), the
-original `/etc/greetd/config.toml` is kept in `~/.local/state/frameshell/`. The session
-itself (autostart, Discord, …) runs behind the lockscreen; `frame login remove` undoes it.
+`frame login` puts the lockscreen's look on the login screen. greetd (CachyOS' display
+manager) gets `greeter/frame-greeter-session` as its `default_session`: a small compositor
+(the one that comes with noctalia-greeter, or cage) with Quickshell drawing
+`greeter/shell.qml`, clock, date and one password field for the one user of the machine.
+The files go to `/usr/share/frameshell/greeter` (the greeter user cannot read your home),
+together with the active theme; `greeter.json` there names the user and the session
+command (`/usr/bin/start-hyprland` on CachyOS). The original `/etc/greetd/config.toml` is
+kept in `~/.local/state/frameshell/`; `frame login remove` puts it back. To look at the
+greeter inside a running desktop: `qs -p ~/frameshell/greeter`.
 
 `frame grub` only works when the system boots with GRUB (`/boot/grub/grub.cfg` exists;
 the CachyOS installer also offers systemd-boot and Limine). It builds the fonts from

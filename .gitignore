@@ -19,3 +19,4 @@ assets/
 
 # Bridge token for the Spotify extension, written by `frame install spicetify`
 /spicetify/.config/spicetify/Extensions/frameshell-token.js
+/greeter/greeter.json

@@ -53,7 +53,7 @@ connected GoXLR gets its utility on its own.
 frame theme set sakura   # periwinkle, sakura, matcha, ember, lagoon, mono
 frame update             # pull and apply everything again
 frame status             # what is linked and what is missing
-frame login              # boot straight into the lockscreen, no separate greeter
+frame login              # the lockscreen look as the login screen
 ```
 
 The details are in [docs](docs/): [the shell](docs/shell.md), [Spotify](docs/spotify.md), [themes](docs/themes.md)

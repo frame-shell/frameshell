@@ -10,8 +10,7 @@
 #                                write every app color file from themes/<name>.json
 #   frame grub [install|remove]  theme the GRUB boot menu (copies to /boot, needs sudo)
 #   frame goxlr                  light the GoXLR in the theme's colors (goxlr-utility)
-#   frame login [install|remove] boot straight into Hyprland behind the frameshell
-#                                lockscreen instead of a separate greeter (needs sudo)
+#   frame login [install|remove] the lockscreen look as the login screen (greetd, needs sudo)
 #   frame wallpaper <args…>      passed to frame-wallpaper (backend, set, apply, …)
 #   frame spotify <args…>        passed to frame-spotify (login, logout, status)
 #   frame layout [tiling|canvas] Hyprland tiling or the infinite canvas
@@ -189,8 +188,7 @@ usage() {
     theme check           only report files that are out of date
     grub [install|remove] theme the GRUB boot menu (copies to /boot, needs sudo)
     goxlr                 faders, buttons and animation of the GoXLR in the theme's colors
-    login [install|remove] the lockscreen as the login screen: greetd starts Hyprland
-                          for you at boot and the shell locks right away (needs sudo)
+    login [install|remove] the lockscreen look as the login screen (greetd greeter, needs sudo)
     wallpaper <…>         wallpaper backends, e.g. "frame wallpaper backend mpv"
                           (both|mpv|image; all commands: frame wallpaper help)
     spotify login         connect the Spotify Web API for the launcher (docs/spotify.md)
@@ -977,11 +975,13 @@ cmd_goxlr() {
 }
 
 # ── Login screen ────────────────────────────────────────────
-# One user, one screen: greetd logs that user into Hyprland at boot (initial_session) and
-# the shell locks before anything else is on screen (login state file, see
-# lockscreen/Lock.qml). The distro's greeter stays as default_session, so a session that
-# ends still lands on a login. Everything under /etc/greetd needs sudo.
+# One user, one screen: the lockscreen's look as the greeter. greetd runs
+# frame-greeter-session (greeter/), which starts a small compositor (the one CachyOS
+# ships with noctalia-greeter, or cage) with Quickshell drawing greeter/shell.qml. The
+# greeter user cannot read your home, so the files go to /usr/share/frameshell/greeter;
+# everything under /etc/greetd and /usr/share needs sudo.
 GREETD_CONFIG="/etc/greetd/config.toml"
+GREETER_DIR="/usr/share/frameshell/greeter"
 
 login_session_command() {
   # The command greetd runs for the session, the way the distro starts Hyprland
@@ -1004,52 +1004,57 @@ cmd_login() {
       local user command
       user=$(id -un)
       command=$(login_session_command)
-      info "greetd will start Hyprland for $user at boot ($command); the shell locks right away."
-      info "Keep in mind: the session runs behind the lockscreen, that is what makes it one screen."
-      confirm "Set up the lockscreen as the login screen?" || exit 0
+      if [[ ! -x /usr/bin/noctalia-greeter-compositor ]] && ! command -v cage >/dev/null; then
+        die "The greeter needs a small compositor: noctalia-greeter (CachyOS) or cage (pacman -S cage)"
+      fi
+      info "greetd will show the frameshell login screen for $user and start: $command"
+      confirm "Set up the lockscreen look as the login screen?" || exit 0
+      step "Greeter files"
+      run sudo install -d -m 755 "$GREETER_DIR" "$GREETER_DIR/ui"
+      run sudo install -m 644 "$REPO/greeter/shell.qml" "$GREETER_DIR/shell.qml"
+      run sudo install -m 644 "$REPO/greeter/ui/Frame.qml" "$GREETER_DIR/ui/Frame.qml"
+      # The active theme, as the shell has it rendered right now
+      run sudo install -m 644 "$REPO/quickshell/.config/quickshell/config/Theme.qml" "$GREETER_DIR/ui/Theme.qml"
+      run sudo install -m 755 "$REPO/greeter/frame-greeter-session" "$GREETER_DIR/frame-greeter-session"
+      local tmp
+      tmp=$(mktemp)
+      printf '{ "user": "%s", "command": ["%s"] }\n' "$user" "$command" >"$tmp"
+      run sudo install -m 644 "$tmp" "$GREETER_DIR/greeter.json"
+      rm -f "$tmp"
+      ok "Greeter in $GREETER_DIR (theme $(current_theme))"
       step "greetd"
       if [[ ! -f $STATE_DIR/greetd-config.orig ]]; then
         run mkdir -p "$STATE_DIR"
         run cp "$GREETD_CONFIG" "$STATE_DIR/greetd-config.orig"
         ok "Original config kept at $STATE_DIR/greetd-config.orig"
       fi
-      local tmp
       tmp=$(mktemp)
-      # Drop an earlier initial_session block, keep terminal and default_session
-      awk 'BEGIN{skip=0} /^\[initial_session\]/{skip=1; next} /^\[/{skip=0} !skip' "$GREETD_CONFIG" >"$tmp"
+      # Keep [terminal] and any other section, replace default_session
+      awk 'BEGIN{skip=0} /^\[default_session\]/{skip=1; next} /^\[/{skip=0} !skip' "$GREETD_CONFIG" | sed -e :a -e '/^\n*$/{$d;N;ba' -e '}' >"$tmp"
       {
         echo
-        echo "# frameshell: log in without a greeter, the shell locks the session itself (frame login)"
-        echo "[initial_session]"
-        echo "command = \"$command\""
-        echo "user = \"$user\""
+        echo "# frameshell: the lockscreen look as the login screen (frame login)"
+        echo "[default_session]"
+        echo "command = \"$GREETER_DIR/frame-greeter-session\""
+        echo "user = \"greeter\""
       } >>"$tmp"
       run sudo install -m 644 "$tmp" "$GREETD_CONFIG"
       rm -f "$tmp"
-      ok "Wrote $GREETD_CONFIG (initial_session for $user)"
-      step "Shell"
-      run mkdir -p "$STATE_DIR"
-      ((DRY_RUN)) || echo lock >"$STATE_DIR/login"
-      ok "The shell locks when the session starts ($STATE_DIR/login)"
-      printf '\n%sDone.%s The next boot goes straight to the lockscreen.\n\n' "$c_ok" "$c_reset"
+      ok "Wrote $GREETD_CONFIG (default_session → frameshell greeter)"
+      printf '\n%sDone.%s The next boot shows the frameshell login screen. frame theme set … updates its colors too.\n\n' "$c_ok" "$c_reset"
       ;;
     remove)
-      confirm "Back to the greeter at boot?" || exit 0
+      confirm "Back to the distro's greeter?" || exit 0
       step "greetd"
       if [[ -f $STATE_DIR/greetd-config.orig ]]; then
         run sudo install -m 644 "$STATE_DIR/greetd-config.orig" "$GREETD_CONFIG"
         ok "Restored $GREETD_CONFIG"
       else
-        local tmp
-        tmp=$(mktemp)
-        awk 'BEGIN{skip=0} /^\[initial_session\]/{skip=1; next} /^\[/{skip=0} !skip' "$GREETD_CONFIG" | sed '/^# frameshell: log in without a greeter/d' >"$tmp"
-        run sudo install -m 644 "$tmp" "$GREETD_CONFIG"
-        rm -f "$tmp"
-        ok "Removed initial_session from $GREETD_CONFIG"
+        warn "No saved original config; edit $GREETD_CONFIG by hand"
       fi
-      step "Shell"
-      ((DRY_RUN)) || rm -f "$STATE_DIR/login"
-      ok "The shell no longer locks at start"
+      step "Greeter files"
+      run sudo rm -rf "$GREETER_DIR"
+      ok "Removed $GREETER_DIR"
       ;;
     *) die "Unknown login action: $action (install or remove)" ;;
   esac

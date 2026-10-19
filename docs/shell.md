@@ -229,8 +229,8 @@ weather panel, media controls and keyboard status. The login only shows on the s
 you were on; the others show the blur. Unlocking plays the animation backwards. The
 password is checked by PAM with `lockscreen/pam/password.conf` (password only).
 
-With `frame login` ([frame.md](frame.md)) the same screen is the login screen: greetd starts
-your session at boot and the shell locks right away.
+With `frame login` ([frame.md](frame.md)) the login screen looks the same: a greeter built
+from the same pieces (`greeter/`), shown by greetd before the session starts.
 
 If Quickshell crashes while locked, Hyprland keeps the screen locked on purpose. To get
 back in: switch to a TTY (Ctrl+Alt+F3), log in, then run
