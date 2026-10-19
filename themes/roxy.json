@@ -9,9 +9,12 @@
     "secondary": "#93a4f7",
     "violet": "#a48cf2",
     "text": "#e1e4ff",
+    "textDim": "#bcc1ea",
     "muted": "#8086b8",
     "frame": "#545b96",
-    "danger": "#ff6b9a"
+    "danger": "#ff6b9a",
+    "warn": "#f2c97d",
+    "green": "#6ee0b6"
   },
   "ansi": [
     "#13153a",
@@ -33,6 +36,7 @@
   ],
   "fonts": {
     "ui": "JetBrains Mono",
-    "mono": "JetBrains Mono"
+    "mono": "JetBrains Mono",
+    "icons": "JetBrainsMono Nerd Font"
   }
 }

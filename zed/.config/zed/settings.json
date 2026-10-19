@@ -1,0 +1,44 @@
+// Zed settings from roxy-dots: Periwinkle theme, JetBrains Mono, file tree on the left,
+// no AI features. This file is a link into ~/roxy-dots/zed, so changes made here or in
+// Zed's settings UI end up in the repo.
+{
+  // Switches off the agent panel, inline assistant and edit predictions
+  "disable_ai": true,
+  "agent": { "enabled": false, "button": false },
+
+  "theme": { "mode": "dark", "dark": "Periwinkle", "light": "Periwinkle" },
+  "ui_font_family": "JetBrains Mono",
+  "ui_font_size": 15,
+  "buffer_font_family": "JetBrains Mono",
+  "buffer_font_size": 15,
+
+  // File tree: left, open from the start, follows the open file. Ctrl+B hides it,
+  // Ctrl+Shift+E jumps into it.
+  "project_panel": {
+    "dock": "left",
+    "starts_open": true,
+    "auto_reveal_entries": true,
+    "git_status": true,
+    "default_width": 280,
+    "indent_guides": { "show": "always" }
+  },
+  "indent_guides": { "enabled": true, "coloring": "fixed" },
+
+  // Terminal panel (Ctrl+J) runs fish, like Ghostty
+  "terminal": {
+    "shell": { "program": "fish" },
+    "font_family": "JetBrains Mono",
+    "dock": "bottom"
+  },
+
+  // No account, collaboration or onboarding buttons
+  "title_bar": {
+    "show_sign_in": false,
+    "show_user_picture": false,
+    "show_onboarding_banner": false,
+    "show_branch_name": true
+  },
+  "collaboration_panel": { "button": false },
+
+  "telemetry": { "diagnostics": false, "metrics": false }
+}

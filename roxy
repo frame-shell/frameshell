@@ -7,6 +7,8 @@
 #   roxy backup  [package...]   snapshot the current configs and app settings
 #   roxy restore [name|latest]  list backups, or put one back
 #   roxy grub [install|remove]  theme the GRUB boot menu (copies to /boot, needs sudo)
+#   roxy theme [check]          write the app color files from themes/roxy.json
+#   roxy wallpaper <args…>      passed to roxy-wallpaper (backend, set, apply, …)
 #   roxy status                 show what is linked and what is missing
 #
 # Options: -n/--dry-run (print what would happen), -y/--yes (no questions)
@@ -20,7 +22,7 @@ GRUB_THEME_DIR="/boot/grub/themes/roxy"
 GRUB_DEFAULT_FILE="/etc/default/grub"
 VENCORD_SRC="${XDG_DATA_HOME:-$HOME/.local/share}/roxy-dots/vencord"
 
-PACKAGES=(ghostty fish starship fastfetch spicetify vencord quickshell hypr)
+PACKAGES=(ghostty fish starship fastfetch spicetify vencord quickshell hypr wallpaper zed dolphin zen)
 
 # Distro packages each config needs; AUR ones go through paru/yay
 declare -A DEPS=(
@@ -32,6 +34,14 @@ declare -A DEPS=(
   [vencord]="vesktop ttf-jetbrains-mono jq git nodejs pnpm"
   [quickshell]="quickshell ttf-jetbrains-mono ttf-jetbrains-mono-nerd wl-clipboard libpulse pciutils"
   [hypr]="hypridle"
+  # ffmpeg makes the video thumbnails in the wallpaper app; linux-wallpaperengine
+  # comes on top when the "both" backend is picked
+  [wallpaper]="jq swaybg mpvpaper ffmpeg"
+  [zed]="zed ttf-jetbrains-mono"
+  # kio-extras: sftp:// and thumbnails; konsole: the F4 terminal panel;
+  # archlinux-xdg-menu: the "Open with" list outside Plasma
+  [dolphin]="dolphin kio-extras ffmpegthumbs kdegraphics-thumbnailers konsole qt6ct archlinux-xdg-menu breeze-icons ttf-jetbrains-mono"
+  [zen]="zen-browser-bin ttf-jetbrains-mono"
 )
 
 # App files outside the repo that roxy touches or that belong in a backup
@@ -40,6 +50,8 @@ declare -A EXTRAS=(
   [spicetify]=".config/spicetify/config-xpui.ini"
   [vencord]=".config/vesktop/settings/settings.json"
   [hypr]=".config/hypr/hyprland.conf"
+  [wallpaper]=".local/state/roxy-dots/wallpaper.json"
+  [dolphin]=".config/dolphinrc .config/qt6ct/qt6ct.conf .config/kdeglobals"
 )
 
 DRY_RUN=0
@@ -103,6 +115,28 @@ confirm() {
   [[ -z $answer || $answer =~ ^[YyJj] ]]
 }
 
+# choose <question> <key|description>...: prints the picked key; the first is the default.
+# The menu goes to stderr, so the answer can be captured with $(…).
+choose() {
+  local question=$1 answer="" i=1 opt
+  shift
+  local opts=("$@")
+  if ((ASSUME_YES)); then
+    echo "${opts[0]%%|*}"
+    return 0
+  fi
+  printf '  %s\n' "$question" >&2
+  for opt in "${opts[@]}"; do
+    printf '    %s%d%s %-8s %s%s%s\n' "$c_primary" "$i" "$c_reset" "${opt%%|*}" "$c_muted" "${opt#*|}" "$c_reset" >&2
+    i=$((i + 1))
+  done
+  printf '  Pick 1-%d [1] ' "${#opts[@]}" >&2
+  read -r answer || true
+  [[ -t 0 ]] || printf '%s\n' "${answer:-1}" >&2
+  [[ $answer =~ ^[0-9]+$ ]] && ((answer >= 1 && answer <= ${#opts[@]})) || answer=1
+  echo "${opts[answer - 1]%%|*}"
+}
+
 usage() {
   header
   cat <<EOF
@@ -116,6 +150,10 @@ usage() {
     backup  [pkg...]      snapshot the current configs and app settings
     restore [name|latest] list backups, or put one back
     grub [install|remove] theme the GRUB boot menu (copies to /boot, needs sudo)
+    theme [check]         write the app color files from themes/roxy.json
+                          ("check" only reports files that are out of date)
+    wallpaper <…>         wallpaper backends, e.g. "roxy wallpaper backend mpv"
+                          (both|mpv|image; all commands: roxy wallpaper help)
     status                show what is linked and what is missing
 
   ${c_bold}Options${c_reset}
@@ -182,24 +220,60 @@ install_deps() {
   fi
 }
 
-# Files of a package, relative to the package root (= relative to $HOME)
+# Zen's default profile folder, from profiles.ini: the [Install…] entry wins, then the
+# profile marked Default=1, then the first one. Prints nothing before Zen's first start.
+zen_profile() {
+  local dir ini path
+  for dir in "$HOME/.zen" "${XDG_CONFIG_HOME:-$HOME/.config}/zen"; do
+    ini="$dir/profiles.ini"
+    [[ -f $ini ]] || continue
+    path=$(awk -F= '
+      /^\[/ { install = ($0 ~ /^\[Install/); profile = ($0 ~ /^\[Profile/); marked = 0; last = ""; next }
+      install && $1 == "Default" && !inst { inst = substr($0, 9) }
+      profile && $1 == "Path" { p = substr($0, 6); if (!first) first = p; last = p }
+      profile && $1 == "Default" && $2 == "1" { marked = 1 }
+      profile && marked && last != "" && !def { def = last }
+      END { print (inst != "" ? inst : (def != "" ? def : first)) }
+    ' "$ini")
+    [[ -n $path ]] || continue
+    [[ $path == /* ]] || path="$dir/$path"
+    [[ -d $path ]] && { echo "$path"; return 0; }
+  done
+  return 0
+}
+
+# Where a package is linked to: $HOME, except Zen, whose files go into its profile.
+# Prints nothing if that folder does not exist yet.
+pkg_root() {
+  case $1 in
+    zen) zen_profile ;;
+    *) echo "$HOME" ;;
+  esac
+}
+
+# Files of a package, relative to the package root
 pkg_files() {
   (cd "$REPO/$1" && find . \( -type f -o -type l \) | sed 's|^\./||' | sort)
 }
 
-# Repo files plus the app files listed in EXTRAS
+# Repo files plus the app files listed in EXTRAS, relative to $HOME (for backups)
 managed_files() {
-  pkg_files "$1"
-  local extra
+  local root prefix="" f extra
+  root="$(pkg_root "$1")"
+  [[ -n $root ]] || return 0
+  [[ $root == "$HOME" ]] || prefix="${root#"$HOME"/}/"
+  while IFS= read -r f; do echo "$prefix$f"; done < <(pkg_files "$1")
   for extra in ${EXTRAS[$1]:-}; do echo "$extra"; done
 }
 
 # Prints linked, partial or missing
 link_state() {
-  local pkg=$1 f total=0 linked=0
+  local pkg=$1 f root total=0 linked=0
+  root="$(pkg_root "$pkg")"
+  [[ -n $root ]] || { echo missing; return 0; }
   while IFS= read -r f; do
     total=$((total + 1))
-    if [[ -L $HOME/$f && "$(readlink -f "$HOME/$f")" == "$REPO/$pkg/$f" ]]; then
+    if [[ -L $root/$f && "$(readlink -f "$root/$f")" == "$REPO/$pkg/$f" ]]; then
       linked=$((linked + 1))
     fi
   done < <(pkg_files "$pkg")
@@ -245,9 +319,10 @@ snapshot_pkgs() {
 
 # Moves existing files that would block stow into the backup folder
 backup_conflicts() {
-  local pkg=$1 dest=$2 f target
+  local pkg=$1 dest=$2 f target root
+  root="$(pkg_root "$pkg")"
   while IFS= read -r f; do
-    target="$HOME/$f"
+    target="$root/$f"
     [[ -e $target || -L $target ]] || continue
     [[ "$(readlink -f "$target")" == "$REPO/$pkg/$f" ]] && continue
     warn "Backing up existing ~/$f"
@@ -256,9 +331,24 @@ backup_conflicts() {
   done < <(pkg_files "$pkg")
 }
 
-# --no-folding links single files, so apps never write into the repo
+# stow_pkg <-R|-D> <package>; --no-folding links single files, so apps never write into the repo
 stow_pkg() {
-  run stow --no-folding -d "$REPO" -t "$HOME" "$@"
+  local root
+  root="$(pkg_root "$2")"
+  run stow --no-folding -d "$REPO" -t "$root" "$1" "$2"
+}
+
+# Backs up whatever is in the way, then links the package; skips packages whose
+# target folder does not exist yet (Zen before its first start)
+link_pkg() {
+  local pkg=$1 backup=$2
+  if [[ -z $(pkg_root "$pkg") ]]; then
+    warn "Nothing to link into yet"
+    return 0
+  fi
+  backup_conflicts "$pkg" "$backup"
+  stow_pkg -R "$pkg"
+  ok "Config linked"
 }
 
 # Backup folder names, newest first
@@ -407,6 +497,144 @@ post_vencord() {
   return 0
 }
 
+# ini_set <file> <section> <key> <value>: sets one key in an INI file (KDE, qt6ct),
+# adds the section or key when missing and leaves everything else alone
+ini_set() {
+  local file=$1 section=$2 key=$3 value=$4 tmp
+  if ((DRY_RUN)); then
+    info "would set [$section] $key=$value in ${file/#"$HOME"/\~}"
+    return 0
+  fi
+  mkdir -p "$(dirname "$file")"
+  [[ -f $file ]] || : >"$file"
+  tmp="$(mktemp)"
+  # Blank lines are held back, so a new key lands before the gap to the next section
+  awk -v s="[$section]" -v k="$key" -v v="$value" '
+    function emit() { if (insec && !done) { print k "=" v; done = 1 } }
+    function flush() { while (blank > 0) { print ""; blank-- } }
+    /^[[:space:]]*$/ { blank++; next }
+    /^\[/ { emit(); flush(); insec = ($0 == s); if (insec) seen = 1; print; next }
+    insec && index($0, k "=") == 1 { flush(); if (!done) { print k "=" v; done = 1 }; next }
+    { flush(); print }
+    END { emit(); flush(); if (!seen) { if (NR) print ""; print s; print k "=" v } }
+  ' "$file" >"$tmp"
+  cat "$tmp" >"$file"
+  rm -f "$tmp"
+}
+
+# set_default_app <desktop file> <mime type...>
+set_default_app() {
+  local desktop=$1
+  shift
+  if ! command -v xdg-mime >/dev/null && ((!DRY_RUN)); then
+    warn "xdg-mime not found (xdg-utils), set the default app by hand"
+    return 0
+  fi
+  run xdg-mime default "$desktop" "$@"
+}
+
+post_zed() {
+  if ! command -v zeditor >/dev/null && ((!DRY_RUN)); then
+    warn "zeditor not found, is the zed package installed?"
+  fi
+  ok "AI features off, file tree on the left (Ctrl+B), Periwinkle theme"
+  if confirm "Open text files with Zed?"; then
+    set_default_app dev.zed.Zed.desktop text/plain text/markdown application/json application/x-shellscript
+    ok "Zed is the default for text files"
+  fi
+  info "Open a project with: zeditor ~/roxy-dots   (Super+Shift+E opens Zed)"
+}
+
+# Outside Plasma, Dolphin takes its colors from its own color scheme setting and the
+# rest of the Qt look (style, fonts, icons) from qt6ct
+post_dolphin() {
+  local qt="$HOME/.config/qt6ct/qt6ct.conf"
+  # QFont string as qt6ct writes it; qt6ct rewrites it in its own format when saved
+  local font='"JetBrains Mono,11,-1,5,400,0,0,0,0,0,0,0,0,0,0,1"'
+  ini_set "$qt" Appearance style Fusion
+  ini_set "$qt" Appearance custom_palette true
+  ini_set "$qt" Appearance color_scheme_path "$HOME/.config/qt6ct/colors/Periwinkle.conf"
+  ini_set "$qt" Appearance icon_theme breeze-dark
+  ini_set "$qt" Fonts general "$font"
+  ini_set "$qt" Fonts fixed "$font"
+  ok "qt6ct: Fusion style, Periwinkle palette, JetBrains Mono, Breeze Dark icons"
+
+  # The id is the file name without .colors
+  ini_set "$HOME/.config/dolphinrc" UiSettings ColorScheme Periwinkle
+  ini_set "$HOME/.config/kdeglobals" Icons Theme breeze-dark
+  ok "Dolphin uses the Periwinkle color scheme"
+
+  # Builds the application menu KDE apps read; without it "Open with" stays empty
+  if command -v kbuildsycoca6 >/dev/null || ((DRY_RUN)); then
+    if run_quiet env XDG_MENU_PREFIX=arch- kbuildsycoca6 --noincremental; then
+      ok "Application list built for \"Open with\""
+    else
+      warn "kbuildsycoca6 failed; run it again after logging in: XDG_MENU_PREFIX=arch- kbuildsycoca6"
+    fi
+  fi
+
+  if confirm "Open folders with Dolphin?"; then
+    set_default_app org.kde.dolphin.desktop inode/directory
+    ok "Dolphin is the default file manager"
+  fi
+  info "SFTP: type sftp://user@host into the address bar; Places → right click → Add Entry keeps it"
+  info "Log out and in once so Hyprland sets QT_QPA_PLATFORMTHEME for the new look"
+}
+
+# Zen's files go into its profile folder, which exists after the first start
+post_zen() {
+  local profile
+  profile="$(zen_profile)"
+  if [[ -z $profile ]]; then
+    info "Start Zen once and close it, then run: roxy install zen"
+    return 0
+  fi
+  info "Profile: ${profile/#"$HOME"/\~}"
+  if command -v pgrep >/dev/null && pgrep -x zen-bin >/dev/null; then
+    info "Zen is running; restart it to load the theme"
+  fi
+  if confirm "Make Zen the default browser?"; then
+    if command -v xdg-settings >/dev/null || ((DRY_RUN)); then
+      run xdg-settings set default-web-browser zen.desktop
+      ok "Zen is the default browser"
+    else
+      warn "xdg-settings not found (xdg-utils)"
+    fi
+  fi
+  return 0
+}
+
+# Asks for the wallpaper backend once; later changes go through: roxy wallpaper backend …
+post_wallpaper() {
+  local bin="$HOME/.local/bin/roxy-wallpaper" state="$STATE_DIR/wallpaper.json" backend
+  if [[ -f $state ]] && command -v jq >/dev/null; then
+    backend="$(jq -r '.backend // "both"' "$state")"
+    ok "Wallpaper backend: $backend"
+  else
+    backend="$(choose "Which wallpapers should run?" \
+      "both|Wallpaper Engine scenes from the Steam Workshop, plus videos and images" \
+      "mpv|only your own videos and images (mpvpaper, swaybg)" \
+      "image|only still images, lowest power use")"
+  fi
+  if [[ $backend == both ]] && ! command -v linux-wallpaperengine >/dev/null; then
+    info "Wallpaper Engine scenes need linux-wallpaperengine (AUR) and Wallpaper Engine bought on Steam"
+    install_deps linux-wallpaperengine-git
+  fi
+  if ((DRY_RUN)); then
+    info "would run: roxy-wallpaper backend $backend"
+  elif [[ -x $bin ]]; then
+    if "$bin" backend "$backend" >/dev/null; then
+      ok "Backend set to $backend"
+    else
+      warn "Could not set the backend, try again with: roxy wallpaper backend $backend"
+    fi
+  else
+    warn "roxy-wallpaper is not linked yet, run: roxy install wallpaper"
+  fi
+  info "Super+W opens the wallpaper app; folders: ~/Pictures/wallpapers and assets/wallpapers"
+  info "Change the backend later with: roxy wallpaper backend both|mpv|image"
+}
+
 # ── Notification daemons ─────────────────────────────────────
 # Only one program can own the notification service on D-Bus. mako, dunst or
 # swaync would take the notifications away from the shell.
@@ -489,7 +717,19 @@ post_hypr() {
       ok "Added to hyprland.conf: $line"
     fi
   fi
-  info "If your config already binds SUPER+L or SUPER+SPACE, or starts hypridle, remove those lines to avoid doubles"
+  # Binds roxy adds (shell.conf, apps.conf) that the user's config may already have;
+  # a doubled bind runs both commands
+  local key dupes=()
+  for key in L SPACE C W E B; do
+    grep -qiE "^[[:space:]]*bind[a-z]*[[:space:]]*=[[:space:]]*(\\\$mainMod|SUPER)[[:space:]]*,[[:space:]]*$key[[:space:]]*," "$conf" \
+      && dupes+=("SUPER+$key")
+  done
+  if ((${#dupes[@]})); then
+    warn "hyprland.conf also binds ${dupes[*]}; roxy binds them too, remove your lines to avoid doubles"
+  fi
+  if grep -qE '^[[:space:]]*exec-once[[:space:]]*=.*\bhypridle\b' "$conf"; then
+    warn "hyprland.conf starts hypridle too; remove that line, roxy/shell.conf starts it"
+  fi
   if command -v hyprctl >/dev/null && ((!DRY_RUN)); then
     hyprctl reload >/dev/null && ok "Hyprland reloaded"
   fi
@@ -595,7 +835,123 @@ cmd_grub() {
   esac
 }
 
+# ── Theme ────────────────────────────────────────────────────
+# themes/templates/<package>/<path> are app color files with placeholders like
+# {{colors.primary}} or {{colors.bg|rgb}}. roxy theme fills them from themes/roxy.json
+# and writes <package>/<path>; those files are committed, so a fresh install works
+# without running it.
+
+THEME_FILE="$REPO/themes/roxy.json"
+TEMPLATE_DIR="$REPO/themes/templates"
+declare -A PALETTE=()
+
+# Flattens roxy.json into PALETTE: colors.primary, ansi.4, fonts.mono, name, …
+load_palette() {
+  command -v jq >/dev/null || die "roxy theme needs jq (pacman -S jq)"
+  local key value
+  while IFS='=' read -r key value; do
+    PALETTE[$key]=$value
+  done < <(jq -r 'paths(scalars) as $p | "\($p | map(tostring) | join("."))=\(getpath($p))"' "$THEME_FILE")
+  [[ -n ${PALETTE[colors.primary]:-} ]] || die "themes/roxy.json has no colors.primary"
+}
+
+# color_filter <#rrggbb> <filter>; filters: rgb (93,111,232), bare (5d6fe8),
+# argb (#ff5d6fe8), alpha:NN (#5d6fe8NN)
+color_filter() {
+  local value=$1 filter=$2 hex
+  hex=${value#\#}
+  case $filter in
+    "") printf '%s' "$value" ;;
+    bare) printf '%s' "$hex" ;;
+    argb) printf '#ff%s' "$hex" ;;
+    rgb) printf '%d,%d,%d' "$((16#${hex:0:2}))" "$((16#${hex:2:2}))" "$((16#${hex:4:2}))" ;;
+    alpha:*) printf '%s%s' "$value" "${filter#alpha:}" ;;
+    *) return 1 ;;
+  esac
+}
+
+# Prints a template with every {{key}} or {{key|filter}} filled in
+render_template() {
+  local file=$1 line out match key filter value
+  local re='\{\{ *([A-Za-z0-9_.]+) *(\| *([A-Za-z0-9:]+))? *\}\}'
+  while IFS= read -r line || [[ -n $line ]]; do
+    out=""
+    while [[ $line =~ $re ]]; do
+      match=${BASH_REMATCH[0]} key=${BASH_REMATCH[1]} filter=${BASH_REMATCH[3]}
+      if [[ -z ${PALETTE[$key]+set} ]]; then
+        printf 'unknown key %s in %s\n' "$key" "${file#"$TEMPLATE_DIR"/}" >&2
+        return 1
+      fi
+      if ! value=$(color_filter "${PALETTE[$key]}" "$filter"); then
+        printf 'unknown filter %s in %s\n' "$filter" "${file#"$TEMPLATE_DIR"/}" >&2
+        return 1
+      fi
+      out+="${line%%"$match"*}$value"
+      line=${line#*"$match"}
+    done
+    printf '%s\n' "$out$line"
+  done <"$file"
+}
+
+# Template paths relative to themes/templates, e.g. zed/.config/zed/themes/periwinkle.json
+theme_templates() {
+  [[ -d $TEMPLATE_DIR ]] || return 0
+  (cd "$TEMPLATE_DIR" && find . -type f | sed 's|^\./||' | sort)
+}
+
+cmd_theme() {
+  local check=0
+  case ${1:-} in
+    "") ;;
+    check) check=1 ;;
+    *) die "Unknown theme action: $1 (roxy theme [check])" ;;
+  esac
+  header
+  load_palette
+  step "Theme ${PALETTE[name]:-} (themes/roxy.json)"
+
+  local rel pkg tmp state color changed=() stale=0
+  tmp="$(mktemp)"
+  while IFS= read -r rel; do
+    pkg=${rel%%/*}
+    if ! render_template "$TEMPLATE_DIR/$rel" >"$tmp"; then
+      rm -f "$tmp"
+      die "Could not render themes/templates/$rel"
+    fi
+    if [[ -f $REPO/$rel ]] && cmp -s "$tmp" "$REPO/$rel"; then
+      state=unchanged color=$c_ok
+    elif ((check)); then
+      state="out of date" color=$c_warn stale=1
+    else
+      run mkdir -p "$(dirname "$REPO/$rel")"
+      run cp "$tmp" "$REPO/$rel"
+      state=updated color=$c_warn
+      [[ " ${changed[*]} " == *" $pkg "* ]] || changed+=("$pkg")
+    fi
+    printf '  %s%s%s %-11s %-46s %s%s%s\n' "$color" "$([[ $state == unchanged ]] && echo ✓ || echo ↻)" "$c_reset" \
+      "$pkg" "${rel#*/}" "$c_muted" "$state" "$c_reset"
+  done < <(theme_templates)
+  rm -f "$tmp"
+
+  if ((check)); then
+    ((stale)) && { warn "Some files do not match themes/roxy.json, run: roxy theme"; exit 1; }
+    info "Everything matches themes/roxy.json"
+  elif ((${#changed[@]})); then
+    info "Linked files change right away; to re-apply app settings run: roxy update ${changed[*]}"
+  else
+    info "Everything matches themes/roxy.json"
+  fi
+  return 0
+}
+
 # ── Commands ─────────────────────────────────────────────────
+
+# Hands everything to the wallpaper helper: roxy wallpaper backend mpv, … set <file>, …
+cmd_wallpaper() {
+  local bin="$HOME/.local/bin/roxy-wallpaper"
+  [[ -x $bin ]] || bin="$REPO/wallpaper/.local/bin/roxy-wallpaper"
+  exec "$bin" "$@"
+}
 
 cmd_install() {
   need_arch
@@ -615,9 +971,7 @@ cmd_install() {
   backup="$(new_backup_dir install)"
   for p in "${pkgs[@]}"; do
     step "$p"
-    backup_conflicts "$p" "$backup"
-    stow_pkg -R "$p"
-    ok "Config linked"
+    link_pkg "$p" "$backup"
     run_post "$p"
   done
 
@@ -663,9 +1017,7 @@ cmd_update() {
   local p
   for p in "${pkgs[@]}"; do
     step "$p"
-    backup_conflicts "$p" "$LAST_BACKUP"
-    stow_pkg -R "$p"
-    ok "Relinked"
+    link_pkg "$p" "$LAST_BACKUP"
     run_post "$p"
   done
 
@@ -682,6 +1034,10 @@ cmd_remove() {
   local p
   for p in "$@"; do
     step "$p"
+    if [[ -z $(pkg_root "$p") ]]; then
+      info "Nothing linked"
+      continue
+    fi
     stow_pkg -D "$p"
     ok "Config unlinked"
   done
@@ -838,6 +1194,8 @@ main() {
     backup) cmd_backup "${args[@]}" ;;
     restore) cmd_restore "${args[@]}" ;;
     grub) cmd_grub "${args[@]}" ;;
+    theme) cmd_theme "${args[@]}" ;;
+    wallpaper | wp) cmd_wallpaper "${args[@]}" ;;
     status | st | doctor) cmd_status ;;
     help) usage ;;
     *) die "Unknown command: $cmd (try: roxy help)" ;;

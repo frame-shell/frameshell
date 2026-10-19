@@ -20,6 +20,9 @@ Dark blue-violet, TUI look, custom shell, everything built by hand.
 | Spotify | Spicetify, TUI theme |
 | Terminal | Ghostty |
 | Terminal shell | fish + Starship |
+| File manager | Dolphin (SFTP, split view), Qt look through qt6ct |
+| Code editor | Zed, AI features off, file tree on the left |
+| Browser | Zen (vertical tabs), square TUI look through `userChrome.css` |
 | System info | fastfetch with your own image as ASCII logo |
 | Boot menu | GRUB theme, terminal style (`roxy grub`) |
 | Dotfile management | GNU Stow via the `roxy` CLI |
@@ -30,7 +33,7 @@ Dark blue-violet, TUI look, custom shell, everything built by hand.
 - [ ] Spotify popup on song change (MPRIS), fading in at the top left, with playback controls (built, untested)
 - [ ] Calendar under the clock on hover, with ISO weeks (built, untested)
 - [ ] Media hover card on the bar: cover, progress, play/pause; next/previous only when the player supports it (built, untested)
-- [ ] OSD module for GoXLR faders, mic mute, system volume and brightness
+- [ ] OSD for GoXLR faders and mutes, the GoXLR mic button, default output volume and keyboard layout (built, untested)
 - [ ] Custom notifications: TUI banners with actions and timer, bell with history, "silent" mode (built, untested)
 - [ ] Vencord plugin with a socket bridge to the shell: messages, voice joins/leaves (own and
   watched channels), server events going live, calls with accept/decline, mute/deafen notices,
@@ -41,7 +44,9 @@ Dark blue-violet, TUI look, custom shell, everything built by hand.
   - Steam theme for Millennium in the TUI look and Periwinkle palette
 - [ ] Launcher: fuzzy app search, calculator, run and power modes (built, untested)
 - [ ] Lockscreen: blurred desktop snapshot, weather panel, media, fade animation (built, untested)
-- [ ] Wallpaper Engine as background
+- [ ] Wallpapers: Wallpaper Engine scenes, videos and images, picked in their own app (built, untested)
+- [ ] Dolphin, Zed and Zen with themes generated from the palette (built, untested)
+- [ ] Generate the older app themes (Ghostty, fish, Starship, Spotify, Vencord, GRUB, Quickshell) with `roxy theme` too
 - [ ] Infinite-canvas workflow
 - [ ] Vencord theme generated from the same color palette (based on system24 theme)
 - [ ] Spotify theme (Spicetify), TUI style: labeled frames (lib, home, queue, player), square covers, `[ ⏸ ]` play button
@@ -52,9 +57,7 @@ Dark blue-violet, TUI look, custom shell, everything built by hand.
 
 ## Theme: Periwinkle
 
-A dark blue-violet palette. All colors come from a single source (`themes/roxy.json`) and are distributed by script
-to Hyprland, terminal, GTK/Qt, Quickshell, Vencord and Spotify.
-Until that script exists, the values are copied into each config by hand.
+A dark blue-violet palette. All colors come from a single source, `themes/roxy.json`.
 
 | Role | Hex |
 |---|---|
@@ -66,17 +69,29 @@ Until that script exists, the values are copied into each config by hand.
 | secondary | `#93a4f7` |
 | violet | `#a48cf2` |
 | text | `#e1e4ff` |
+| textDim | `#bcc1ea` |
 | muted | `#8086b8` |
 | frame | `#545b96` |
 | danger | `#ff6b9a` |
+| warn | `#f2c97d` |
+| green | `#6ee0b6` |
 
+`roxy theme` writes the app color files from it. Each one has a template in
+`themes/templates/<package>/<path>` with placeholders such as `{{colors.primary}}`,
+`{{ansi.4}}` or `{{colors.bg|rgb}}` (filters: `rgb` → `93,111,232`, `argb` → `#ff5d6fe8`,
+`bare` → `5d6fe8`, `alpha:NN` → `#5d6fe8NN`). The output lands in `<package>/<path>` and is
+committed, so a fresh install works without running it. `roxy theme check` only reports
+files that no longer match.
+
+So far Zed, Dolphin (KDE color scheme and qt6ct palette) and Zen are generated; Ghostty,
+fish, Starship, Spotify, Vencord, GRUB and Quickshell still carry the values by hand.
 Additional themes can be added later as extra JSON files.
 
 ## Structure
 
 ```
 roxy-dots/
-├── hypr/              # roxy/shell.conf (keybinds, autostart) + hypridle.conf
+├── hypr/              # roxy/shell.conf (keybinds, autostart), roxy/apps.conf, hypridle.conf
 ├── quickshell/.config/quickshell/
 │   ├── shell.qml      # Entry point
 │   ├── config/        # Theme.qml (palette, fonts, timings), Config.qml (your settings)
@@ -95,9 +110,12 @@ roxy-dots/
 ├── starship/          # TUI frame prompt with git and language segments
 ├── fastfetch/         # System info, logo from assets/roxy.png
 ├── spicetify/         # Spotify theme (color.ini + user.css)
-├── themes/            # Color palettes (roxy.json, ...)
-├── scripts/           # Theme generator and helpers
+├── themes/            # roxy.json (palette) and templates/ for roxy theme
 ├── vencord/           # Vesktop theme (system24 + Periwinkle) and plugins/shellBridge
+├── wallpaper/         # roxy-wallpaper: backends for the wallpaper app
+├── zed/               # settings.json + generated Periwinkle theme
+├── dolphin/           # generated KDE color scheme + qt6ct palette
+├── zen/               # user.js + chrome/userChrome.css, linked into the Zen profile
 ├── grub/roxy/         # GRUB theme, copied to /boot by `roxy grub`
 ├── assets/            # Characters, wallpapers per theme
 ├── PLAN.md
@@ -127,6 +145,8 @@ roxy restore                # list backups
 roxy restore latest         # put the newest one back
 roxy grub                   # theme the GRUB boot menu (sudo)
 roxy grub remove            # switch it off again
+roxy theme                  # write the app color files from themes/roxy.json
+roxy wallpaper backend mpv  # wallpaper backend: both, mpv or image
 ```
 
 `roxy grub` only works when the system boots with GRUB (`/boot/grub/grub.cfg` exists;
@@ -139,8 +159,9 @@ Backups live in `~/.local/state/roxy-dots/backup/` (one folder per snapshot, nam
 and reason). `install` moves conflicting configs there, `update` and `restore` take a
 snapshot before they change anything. `update` also updates the `roxy` CLI itself.
 
-Packages: `ghostty`, `fish`, `starship`, `fastfetch`, `spicetify`, `vencord`, `quickshell`, `hypr`.
-Each package folder mirrors the home directory (`ghostty/.config/ghostty/...`).
+Packages: `ghostty`, `fish`, `starship`, `fastfetch`, `spicetify`, `vencord`, `quickshell`,
+`hypr`, `wallpaper`, `zed`, `dolphin`, `zen`. Each package folder mirrors the home directory
+(`ghostty/.config/ghostty/...`); only `zen` mirrors the Zen profile folder instead.
 
 Manual steps:
 
@@ -155,6 +176,12 @@ Manual steps:
   binds or a second `exec-once = hypridle` if your config has them.
 - **Weather:** set your city in `quickshell/.config/quickshell/config/Config.qml`
   (`weatherLocation`); empty means wttr.in guesses it from your IP.
+- **Zen:** start it once and close it, then `roxy install zen`; its files go into the
+  profile folder, which only exists after the first start.
+- **Dolphin:** log out and in once after `roxy install dolphin`, so Hyprland sets
+  `QT_QPA_PLATFORMTHEME=qt6ct`.
+- **Wallpaper Engine:** needs Wallpaper Engine bought on Steam; subscribed Workshop items
+  show up in the wallpaper app.
 
 Not covered by `roxy` yet: Hyprland itself, `goxlr-utility`.
 
@@ -197,6 +224,45 @@ GoXLR notes: levels and mutes come from the goxlr-utility HTTP API
 description; if yours are named differently (`wpctl status`), change `goxlrOutputs` and
 `goxlrInputs` in `config/Config.qml`.
 
+## OSD
+
+A small frame at the bottom center, gone after 1.6 s and never on the lockscreen. It only
+shows what already happened: a GoXLR fader moved or was muted, the GoXLR mic button was
+pressed, the default output volume changed (e.g. from an app), the keyboard layout
+switched. There is no keyboard volume control; the levels live on the GoXLR.
+
+## Wallpapers
+
+Super+W (or **wallpapers ›** in the control center) opens the wallpaper app: search by
+title and tags, filter by type and screen, pick backend and playback settings (FPS limit,
+sound, scaling, pause in fullscreen). It is a front end for `roxy-wallpaper`, which
+Hyprland also runs at login (`roxy-wallpaper apply`).
+
+| Backend | Shows |
+|---|---|
+| `both` | Wallpaper Engine scenes and videos from the Workshop (linux-wallpaperengine), plus videos (mpvpaper) and images (swaybg) from the folders |
+| `mpv` | only the folders: videos through mpvpaper, images through swaybg |
+| `image` | only still images, lowest power use |
+
+Folders: `~/Pictures/wallpapers` and `assets/wallpapers`; Workshop items come from
+`~/.local/share/Steam/steamapps/workshop/content/431960`. `roxy install wallpaper` asks for
+the backend once; `roxy wallpaper backend both|mpv|image` changes it later. Everything is
+kept in `~/.local/state/roxy-dots/wallpaper.json`. The lockscreen blurs a still snapshot,
+so moving wallpapers do not run behind it.
+
+## Apps
+
+| App | Key | Set up by roxy |
+|---|---|---|
+| Dolphin | Super+E | Periwinkle color scheme, qt6ct (Fusion, palette, JetBrains Mono, Breeze Dark icons), "Open with" list outside Plasma, default for folders |
+| Zed | Super+Shift+E | Periwinkle theme, AI off, file tree on the left (Ctrl+B hides it, Ctrl+Shift+E focuses it), fish in the terminal panel (Ctrl+J), no sign-in or telemetry, default for text files |
+| Zen | Super+B | accent, dark mode and square corners in `user.js`, Periwinkle `userChrome.css`, default browser |
+
+SFTP in Dolphin: type `sftp://user@host/path` into the address bar; right-click the
+sidebar → **Add Entry** keeps the server there. Dolphin, Zed and Zen ask before they become
+default apps. Zed's `settings.json` is linked from the repo, so changes made in Zed end up
+in `~/roxy-dots/zed`.
+
 ## Notifications and media
 
 The shell is the notification daemon (no mako/dunst/swaync needed; remove them from
@@ -217,7 +283,8 @@ them over MPRIS (Spotify yes, a YouTube tab usually not).
 - people joining or leaving your voice channel
 - channels you watch (right-click a voice channel → "Watch in shell"), with "join"
 - scheduled server events going live, with "join" for stage and voice events
-- incoming calls with "accept" and "decline"
+- incoming calls with "accept" and "decline"; a call nobody answers turns into a missed-call
+  notice with "call back" (declining inside Discord itself also shows up as missed)
 - your own mute and deafen changes, with "unmute"/"undeafen"
 
 `roxy install vencord` sets it up: it clones Vencord to `~/.local/share/roxy-dots/vencord`,
