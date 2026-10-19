@@ -6,8 +6,8 @@
  *
  * Events: DMs and mentions, people joining/leaving your voice channel (and channels you
  * watch, see "Watch in shell" in a voice channel's right-click menu), scheduled server
- * events going live, incoming calls, your own mute/deafen changes. Actions: accept/decline call, join a watched channel,
- * open channel, toggle mute/deafen.
+ * events going live, incoming calls and how they ended (answered, declined, missed), your own mute/deafen changes.
+ * Actions: accept/decline call, call back, join a watched channel, open channel, toggle mute/deafen.
  *
  * Not tested yet (waits for the move to Linux). Discord's internal module and event
  * names change now and then; if something stops working, check them first.
@@ -60,7 +60,9 @@ const CallActions = findByPropsLazy("stopRinging", "ring");
 
 let commandPoll: ReturnType<typeof setInterval> | undefined;
 // Calls we already told the shell about, so CALL_UPDATE does not repeat them
-const ringingCalls = new Set<string>();
+const ringingCalls = new Map<string, { caller: string; avatar: string }>();
+// Calls declined from the shell; anything else that stops ringing without you joining is missed
+const declinedCalls = new Set<string>();
 // Scheduled events already announced as started
 const startedEvents = new Set<string>();
 
@@ -96,21 +98,30 @@ function handleCall(channelId: string, ringing: string[] | undefined) {
     const ringsMe = !!me && (ringing ?? []).includes(me);
 
     if (ringsMe && !ringingCalls.has(channelId)) {
-        ringingCalls.add(channelId);
         const channel = ChannelStore.getChannel(channelId);
         // In a DM the other recipient is the caller; group calls use the group name
-        const caller = UserStore.getUser(channel?.recipients?.[0]);
-        Native.send({
-            type: "call",
-            state: "ringing",
-            caller: channel?.name || displayName(caller),
-            avatar: avatarOf(caller),
-            channelId
-        });
+        const user = UserStore.getUser(channel?.recipients?.[0]);
+        const info = { caller: channel?.name || displayName(user), avatar: avatarOf(user) };
+        ringingCalls.set(channelId, info);
+        Native.send({ type: "call", state: "ringing", ...info, channelId });
     } else if (!ringsMe && ringingCalls.has(channelId)) {
-        ringingCalls.delete(channelId);
-        Native.send({ type: "call", state: "ended", channelId });
+        endCall(channelId);
     }
+}
+
+// Ringing stopped: tell the shell whether you answered, declined or missed it.
+// Joining updates the voice store a moment after the ringing list, so wait a little.
+// Declining inside Discord itself cannot be told apart from the caller hanging up; it shows as missed.
+function endCall(channelId: string) {
+    const info = ringingCalls.get(channelId);
+    if (!info)
+        return;
+    ringingCalls.delete(channelId);
+    setTimeout(() => {
+        const reason = SelectedChannelStore.getVoiceChannelId() === channelId ? "accepted"
+            : declinedCalls.delete(channelId) ? "declined" : "missed";
+        Native.send({ type: "call", state: "ended", reason, ...info, channelId });
+    }, 400);
 }
 
 function run(command: any) {
@@ -119,7 +130,17 @@ function run(command: any) {
             ChannelActions.selectVoiceChannel(command.channelId);
             break;
         case "decline_call":
+            declinedCalls.add(command.channelId);
             CallActions.stopRinging(command.channelId);
+            break;
+        case "call_back":
+            // Join the DM call and ring the others; ring()'s arguments are a guess until tested
+            ChannelActions.selectVoiceChannel(command.channelId);
+            try {
+                CallActions.ring(command.channelId);
+            } catch (e) {
+                console.warn("[ShellBridge] ring failed", e);
+            }
             break;
         case "join_voice":
             ChannelActions.selectVoiceChannel(command.channelId);
@@ -231,9 +252,9 @@ export default definePlugin({
             handleCall(channelId, ringing);
         },
 
+        // The caller hung up before anyone answered
         CALL_DELETE({ channelId }: any) {
-            if (ringingCalls.delete(channelId))
-                Native.send({ type: "call", state: "ended", channelId });
+            endCall(channelId);
         },
 
         // The store updates right after the event, so read it a moment later
@@ -258,6 +279,7 @@ export default definePlugin({
     stop() {
         clearInterval(commandPoll);
         ringingCalls.clear();
+        declinedCalls.clear();
         Native.disconnect();
     }
 });
