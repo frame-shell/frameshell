@@ -11,6 +11,7 @@
 #   frame grub [install|remove]  theme the GRUB boot menu (copies to /boot, needs sudo)
 #   frame wallpaper <args…>      passed to frame-wallpaper (backend, set, apply, …)
 #   frame spotify <args…>        passed to frame-spotify (login, logout, status)
+#   frame layout [tiling|canvas] Hyprland tiling or the infinite canvas
 #   frame status                 show what is linked and what is missing
 #
 # Options: -n/--dry-run (print what would happen), -y/--yes (no questions)
@@ -188,6 +189,7 @@ usage() {
                           (both|mpv|image; all commands: frame wallpaper help)
     spotify login         connect the Spotify Web API for the launcher (docs/spotify.md)
     spotify status        logged in or not; "spotify logout" forgets the tokens
+    layout [tiling|canvas] normal tiling or the infinite canvas (windows on an endless plane)
     status                show what is linked and what is missing
 
   ${c_bold}Options${c_reset}
@@ -447,6 +449,14 @@ post_spicetify() {
   fi
   run spicetify config current_theme Frameshell color_scheme Frameshell
   spotify_bridge
+
+  # The AUR Spotify sits in /opt/spotify, owned by root; spicetify has to write there
+  if [[ -d /opt/spotify && ! -w /opt/spotify ]]; then
+    info "Spotify in /opt/spotify is not writable for you, spicetify needs that"
+    if confirm "Allow it (sudo chmod a+wr on /opt/spotify, as spicetify's docs say)?"; then
+      run sudo chmod a+wr /opt/spotify && run sudo chmod -R a+wr /opt/spotify/Apps
+    fi
+  fi
 
   # apply fails on a fresh install or after a Spotify update; a new backup fixes both
   # The quiet first try avoids spicetify's "you haven't backed up" error on a fresh install
@@ -1259,19 +1269,169 @@ cmd_spotify() {
   exec "$bin" "$@"
 }
 
+# ── Setup ────────────────────────────────────────────────────
+
+# Always part of frameshell; the rest is asked in the setup
+CORE_PACKAGES=(ghostty fish starship fastfetch quickshell hypr wallpaper)
+OPTIONAL_PACKAGES=(
+  "spicetify|Spotify, themed, with search and controls in the launcher"
+  "vencord|Vesktop (Discord), themed, with calls and DMs in the shell"
+  "zed|Zed, the code editor"
+  "dolphin|Dolphin, the file manager"
+  "zen|Zen, the browser"
+)
+LAYOUT_STATE="$STATE_DIR/layout"
+
+# Filled by setup_wizard, used by cmd_install
+SETUP_PKGS=()
+WANT_CLAUDE=0
+WANT_GOXLR=0
+PICKED_LAYOUT=""
+
+# TC-Helicon GoXLR (1220:8fe0) or GoXLR Mini (1220:8fe4) on USB
+goxlr_connected() {
+  local d
+  for d in /sys/bus/usb/devices/*; do
+    [[ -r $d/idVendor && -r $d/idProduct ]] || continue
+    [[ $(<"$d/idVendor") == 1220 && $(<"$d/idProduct") == 8fe[04] ]] && return 0
+  done
+  return 1
+}
+
+current_layout() {
+  local mode=tiling
+  [[ -f $LAYOUT_STATE ]] && read -r mode <"$LAYOUT_STATE"
+  [[ $mode == canvas ]] && echo canvas || echo tiling
+}
+
+save_layout() {
+  run mkdir -p "$STATE_DIR"
+  if ((DRY_RUN)); then
+    info "would write $1 to $LAYOUT_STATE"
+  else
+    echo "$1" >"$LAYOUT_STATE"
+  fi
+}
+
+# frame install without packages: everything at once, or app by app
+setup_wizard() {
+  local mode o
+  mode=$(choose "What should be set up?" \
+    "full|everything: the shell plus Spotify, Vesktop, Zed, Dolphin, Zen and Claude Code" \
+    "pick|the shell, then each app with a yes or no" \
+    "shell|only the shell: terminal, prompt, bar, launcher, lockscreen, wallpapers")
+  SETUP_PKGS=("${CORE_PACKAGES[@]}")
+  case $mode in
+    full)
+      for o in "${OPTIONAL_PACKAGES[@]}"; do SETUP_PKGS+=("${o%%|*}"); done
+      WANT_CLAUDE=1
+      ;;
+    pick)
+      for o in "${OPTIONAL_PACKAGES[@]}"; do
+        confirm "${o#*|}?" && SETUP_PKGS+=("${o%%|*}")
+      done
+      confirm "Claude Code (the claude command; the launcher's c asks it)?" && WANT_CLAUDE=1
+      ;;
+  esac
+  command -v claude >/dev/null && WANT_CLAUDE=0
+
+  # A connected GoXLR needs its utility for the faders and mutes in the shell
+  if goxlr_connected && ! command -v goxlr-daemon >/dev/null; then
+    ok "GoXLR found, GoXLR Utility will be installed"
+    WANT_GOXLR=1
+  fi
+
+  if [[ ! -f $LAYOUT_STATE ]]; then
+    PICKED_LAYOUT=$(choose "Window layout? (switch any time: frame layout tiling|canvas)" \
+      "tiling|Hyprland's tiling with workspaces, as usual" \
+      "canvas|infinite canvas: windows float on an endless plane, the bar shows a minimap")
+  fi
+}
+
+# Anthropic's own installer puts claude into ~/.local/bin and keeps it updated
+install_claude() {
+  step "Claude Code"
+  if command -v claude >/dev/null; then
+    ok "claude already installed"
+    return 0
+  fi
+  if run bash -c 'curl -fsSL https://claude.ai/install.sh | bash'; then
+    ok "Claude Code installed; run claude once to sign in, then the launcher's c works"
+  else
+    warn "Claude Code install failed; try again with: curl -fsSL https://claude.ai/install.sh | bash"
+  fi
+}
+
+# The package came with the dependencies; start the daemon now, Hyprland starts it from then on
+setup_goxlr() {
+  step "GoXLR"
+  if ! command -v goxlr-daemon >/dev/null && ((!DRY_RUN)); then
+    warn "goxlr-daemon not found after the install; the shell's GoXLR panel stays empty"
+    return 0
+  fi
+  if command -v pgrep >/dev/null && pgrep -x goxlr-daemon >/dev/null; then
+    ok "GoXLR Utility is running"
+  elif ((DRY_RUN)); then
+    info "would start goxlr-daemon"
+  else
+    (goxlr-daemon >/dev/null 2>&1 &)
+    ok "GoXLR Utility started (settings: http://localhost:14564)"
+  fi
+  info "Unplug and replug the GoXLR once if it does not show up (new udev rules)"
+}
+
+# frame layout [tiling|canvas]: switch between Hyprland's tiling and the infinite canvas
+cmd_layout() {
+  local want=${1:-} now
+  now=$(current_layout)
+  if [[ -z $want ]]; then
+    info "Layout: $now (frame layout tiling|canvas)"
+    return 0
+  fi
+  [[ $want == tiling || $want == canvas ]] || die "Unknown layout: $want (tiling or canvas)"
+  if [[ $want == "$now" ]]; then
+    ok "Already $now"
+    return 0
+  fi
+  # Leaving the canvas: big windows tile again before the canvas code is gone
+  if [[ $now == canvas ]] && command -v hyprctl >/dev/null; then
+    run_quiet hyprctl eval 'frame_canvas.release()' || true
+  fi
+  save_layout "$want"
+  if command -v hyprctl >/dev/null; then
+    run_quiet hyprctl reload || true
+  fi
+  ok "Layout: $want"
+  [[ $want == canvas ]] && info "Super+Ctrl+arrows looks around, Super+Alt+arrows jumps between windows, hold Super for all keys"
+  return 0
+}
+
 cmd_install() {
   need_arch
-  local pkgs=("$@") p
-  ((${#pkgs[@]})) || pkgs=("${PACKAGES[@]}")
+  local pkgs=("$@") p extra=()
 
   header
+  if ((${#pkgs[@]} == 0)); then
+    setup_wizard
+    pkgs=("${SETUP_PKGS[@]}")
+  fi
+  # spicetify themes a Spotify that has to be there; the AUR one lives in /opt/spotify
+  if [[ " ${pkgs[*]} " == *" spicetify "* ]] && ! command -v spotify >/dev/null && ! command -v spotify-launcher >/dev/null; then
+    extra+=(spotify)
+  fi
+  ((WANT_GOXLR)) && extra+=(goxlr-utility)
+
   info "Packages: ${pkgs[*]}"
+  ((${#extra[@]})) && info "Apps: ${extra[*]}"
+  ((WANT_CLAUDE)) && info "Claude Code: yes"
+  [[ -n $PICKED_LAYOUT ]] && info "Layout: $PICKED_LAYOUT"
   ((DRY_RUN)) && info "Dry run, nothing will be changed"
   confirm "Install and link these?" || exit 0
 
   step "Dependencies"
   mapfile -t deps < <(deps_of "${pkgs[@]}")
-  install_deps stow jq "${deps[@]}"
+  install_deps stow jq "${deps[@]}" "${extra[@]}"
+  [[ -n $PICKED_LAYOUT ]] && save_layout "$PICKED_LAYOUT"
 
   # The color files are generated, so they exist before anything is linked
   step "Theme"
@@ -1290,6 +1450,9 @@ cmd_install() {
     link_pkg "$p" "$backup"
     run_post "$p"
   done
+
+  ((WANT_CLAUDE)) && install_claude
+  ((WANT_GOXLR)) && setup_goxlr
 
   step "frame command"
   link_self
@@ -1442,6 +1605,10 @@ cmd_status() {
 
   step "Checks"
   ok "Theme $(current_theme) (frame theme list)"
+  ok "Layout $(current_layout) (frame layout tiling|canvas)"
+  if goxlr_connected && ! command -v goxlr-daemon >/dev/null; then
+    warn "A GoXLR is connected but GoXLR Utility is missing (paru -S goxlr-utility)"
+  fi
   command -v pacman >/dev/null || warn "pacman not found, dependency checks are skipped"
   command -v stow >/dev/null && ok "stow installed" || warn "stow missing (frame install takes care of it)"
 
@@ -1518,6 +1685,7 @@ main() {
     theme) cmd_theme "${args[@]}" ;;
     wallpaper | wp) cmd_wallpaper "${args[@]}" ;;
     spotify) cmd_spotify "${args[@]}" ;;
+    layout) cmd_layout "${args[@]}" ;;
     status | st | doctor) cmd_status ;;
     help) usage ;;
     *) die "Unknown command: $cmd (try: frame help)" ;;

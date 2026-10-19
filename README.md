@@ -14,6 +14,7 @@ into its own shell.
 
 - A Quickshell shell: bar, control center with GoXLR faders and an app mixer, launcher,
   lockscreen, notifications, OSD and a wallpaper app
+- Tiling with workspaces, or an infinite canvas where windows float on an endless plane
 - A launcher that does more than apps: Spotify, Discord DMs, timers and alarms,
   emoji, files, ssh, clipboard, web search and Claude
 - Bridges to Discord (calls, voice joins, messages), the GoXLR and Spotify
@@ -26,6 +27,9 @@ into its own shell.
 git clone https://github.com/vxnsin/frameshell ~/frameshell
 ~/frameshell/frame install
 ```
+
+It asks whether you want everything or pick the apps, which layout and which theme; a
+connected GoXLR gets its utility on its own.
 
 <p align="center">
   <img src=".github/install.svg" alt="frame install on a fresh CachyOS" width="100%">

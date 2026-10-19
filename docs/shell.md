@@ -60,9 +60,39 @@ empty folder (`~/.local/state/frameshell/claude`), so no project files go along.
 on/off: `claudeModel` and `claudeEnabled` in `config/Config.qml`, next to the web search
 engines, the file search folder and the snooze length.
 
+## Infinite canvas
+
+Instead of tiling into workspaces, every window can float on one endless plane and the
+screen is a view you move over it. Pick it in `frame install` or switch with
+`frame layout canvas` (and back with `frame layout tiling`); Hyprland reloads by itself.
+
+| Key | |
+|---|---|
+| Super+Ctrl+arrows | look half a screen further |
+| Super+Ctrl+wheel, with Shift sideways | scroll the view |
+| Super+Alt+arrows | jump to the nearest window that way and bring it into view |
+| Super+Shift+arrows | move the focused window a little |
+| Super+Ctrl+F | center the focused window |
+| Super+Ctrl+G | tidy every window into a grid around the middle |
+| Super+Ctrl+H | back to where the canvas started |
+| Super + drag | move and resize windows as usual |
+
+New windows open in the middle of the screen at about half its size, or next to the
+others when the middle is taken, and the view follows them. Dialogs keep their own size
+and place. Instead of the workspace numbers the bar shows a minimap: the windows as small
+blocks, the screen as an outline, and the position next to it. Click on the minimap to
+look there, scroll on it to move the view.
+
+How it works: Hyprland has no camera, so moving the view moves all windows of the
+workspace the other way, and the window animation turns that into a glide. Your spot is
+kept in `~/.local/state/frameshell/canvas` across reloads. Each workspace (and so each
+monitor) is its own canvas. With several monitors, a window half off one screen also shows
+on the neighbouring one. There is no zooming out: Hyprland cannot scale windows from a
+config.
+
 ## Bar and control center
 
-The bar runs on every screen: workspaces and window title on the left, clock in the
+The bar runs on every screen: workspaces (or the canvas minimap) and window title on the left, clock in the
 middle, media, CPU load and temperature, RAM, volume and keyboard layout on the right.
 It flies up while the lockscreen takes over and drops back in after unlocking.
 

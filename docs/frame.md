@@ -5,10 +5,24 @@ git clone git@github.com:vxnsin/frameshell.git ~/frameshell
 ~/frameshell/frame install
 ```
 
-`frame install` installs the missing packages (through `paru`/`yay`), asks for a theme
-and writes its color files, moves existing configs to `~/.local/state/frameshell/backup/`,
-links the configs with GNU Stow, applies the Spotify theme and puts `frame` into
-`~/.local/bin`.
+`frame install` without package names starts the setup. It asks three things:
+
+1. **How much:** *everything* (the shell plus Spotify, Vesktop, Zed, Dolphin, Zen and
+   Claude Code), *pick* (the shell, then a yes or no for each app) or *only the shell*
+   (terminal, prompt, bar, launcher, lockscreen, wallpapers).
+2. **Layout:** Hyprland's tiling with workspaces, or the infinite canvas (see
+   [shell.md](shell.md#infinite-canvas)); `frame layout tiling|canvas` switches later.
+3. **Theme:** one of the six; `frame theme set <name>` switches later.
+
+On top of that it notices a connected GoXLR (or GoXLR Mini) and installs GoXLR Utility for
+the faders and mutes in the shell, and it installs Spotify (the AUR package) when the
+Spotify theme is picked and no Spotify is there. Claude Code comes from Anthropic's own
+installer (`claude.ai/install.sh`). `frame install -y` takes everything without asking.
+
+Then it installs the missing packages (through `paru`/`yay`), writes the theme's color
+files, moves existing configs to `~/.local/state/frameshell/backup/`, links the configs
+with GNU Stow, applies the Spotify theme and puts `frame` into `~/.local/bin`.
+`frame install zed dolphin` installs just those packages, without the questions.
 
 ```bash
 frame status                 # what is linked, what is missing, active theme
@@ -25,6 +39,7 @@ frame grub                   # theme the GRUB boot menu (sudo)
 frame grub remove            # switch it off again
 frame wallpaper backend mpv  # wallpaper backend: both, mpv or image
 frame spotify login          # Spotify Web API for the launcher, see spotify.md
+frame layout canvas          # infinite canvas; frame layout tiling goes back
 ```
 
 `frame grub` only works when the system boots with GRUB (`/boot/grub/grub.cfg` exists;
@@ -45,7 +60,8 @@ Packages: `ghostty`, `fish`, `starship`, `fastfetch`, `spicetify`, `vencord`, `q
 Manual steps:
 
 - **fastfetch logo:** put any PNG at `assets/logo.png`; fastfetch renders it as ASCII art.
-- **Spotify:** install and open Spotify once before `frame install spicetify`.
+- **Spotify:** it has to have run once before the theme applies; if the first install
+  says so, open Spotify, log in and run `frame update spicetify`.
 - **Vesktop:** start it once, then close it before `frame install vencord` so the theme can be
   switched on automatically (otherwise: Settings → Themes → Frameshell).
 - **Font:** JetBrains Mono everywhere (TUI look); `frame` installs `ttf-jetbrains-mono`
@@ -68,7 +84,7 @@ Manual steps:
 - **Wallpaper Engine:** needs Wallpaper Engine bought on Steam; subscribed Workshop items
   show up in the wallpaper app.
 
-Not covered by `frame` yet: Hyprland itself, `goxlr-utility`.
+Not covered by `frame` yet: Hyprland itself.
 
 ## Structure
 
