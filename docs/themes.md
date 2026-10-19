@@ -48,3 +48,11 @@ never the output. `frame theme check` only reports files that do not match the a
 Generated: Quickshell (`config/Theme.qml`), Ghostty, fish syntax colors, Starship, Spotify
 (`color.ini`), Vesktop, Hyprland window borders, Zed, Dolphin (KDE color scheme and qt6ct
 palette), Zen and GRUB (`theme.txt`; `frame grub` draws the 1px frame images itself).
+
+## GoXLR
+
+With goxlr-utility running, `frame theme set` (and `frame goxlr` on its own) also lights the
+GoXLR in the theme: faders as a gradient meter from the secondary color at the top to the
+primary color, mute and cough buttons dimmed primary, danger when muted, the global and
+accent lights in primary and accent, and the "Simple" animation breathing through it (the
+Mini has no Ripple). The colors are saved into the loaded GoXLR profile.

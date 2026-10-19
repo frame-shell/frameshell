@@ -37,10 +37,19 @@ frame restore latest         # put the newest one back
 frame theme list             # themes; frame theme set <name> switches
 frame grub                   # theme the GRUB boot menu (sudo)
 frame grub remove            # switch it off again
+frame login                  # the lockscreen as the login screen (greetd, sudo)
+frame login remove           # back to the greeter
 frame wallpaper backend mpv  # wallpaper backend: both, mpv or image
 frame spotify login          # Spotify Web API for the launcher, see spotify.md
 frame layout canvas          # infinite canvas; frame layout tiling goes back
 ```
+
+`frame login` is for one person on one machine: greetd gets an `initial_session` that
+starts Hyprland for you at boot, and the shell locks the session the moment it is up, so
+the first thing on screen is the frameshell lockscreen with your password field. The
+distro's greeter stays as `default_session` (the fallback when a session ends), the
+original `/etc/greetd/config.toml` is kept in `~/.local/state/frameshell/`. The session
+itself (autostart, Discord, …) runs behind the lockscreen; `frame login remove` undoes it.
 
 `frame grub` only works when the system boots with GRUB (`/boot/grub/grub.cfg` exists;
 the CachyOS installer also offers systemd-boot and Limine). It builds the fonts from
@@ -90,7 +99,7 @@ Not covered by `frame` yet: Hyprland itself.
 
 ```
 frameshell/
-├── frame              # CLI: install, update, remove, backup, restore, theme, grub, wallpaper, status
+├── frame              # CLI: install, update, remove, backup, restore, theme, grub, login, wallpaper, status
 ├── themes/            # periwinkle.json, sakura.json, … and templates/ for frame theme
 ├── hypr/              # frame/shell.lua (keybinds, autostart), apps.lua, hotkeys.lua, hypridle.conf
 ├── quickshell/.config/quickshell/

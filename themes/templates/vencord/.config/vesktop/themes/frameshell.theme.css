@@ -64,9 +64,9 @@ body {
     /* other */
     --small-user-panel: on;
 
-    /* corners: square panels and avatars like a terminal */
+    /* corners: square panels like a terminal, round profile pictures (server icons below) */
     --unrounding: on;
-    --round-pfp: off;
+    --round-pfp: on;
     --remove-pfp-decor: off;
 
     /* styling */
@@ -157,4 +157,48 @@ body {
     --purple-3: {{colors.accent|darken:8}};
     --purple-4: {{colors.accent|darken:16}};
     --purple-5: {{colors.accent|darken:24}};
+}
+
+
+/* Round server icons too: system24's --unrounding drops Discord's icon mask, this puts a
+ * circle back (the class hashes are the ones system24 targets, the attribute selectors
+ * catch renamed ones) */
+.svg_cc5dd2 > mask {
+    display: block;
+}
+.mask__68edb > foreignObject,
+.svg__2338f.imageContainer_ef9ae7 > foreignObject,
+[class*="listItem_"] [class*="wrapper_"] > svg > foreignObject {
+    mask: url(#svg-mask-squircle);
+}
+[class*="listItem_"] [class*="wrapper_"] img[class*="icon_"],
+[class*="listItem_"] [class*="wrapper_"] [class*="acronym_"],
+[class*="listItem_"] [class*="wrapper_"] [class*="circleIconButton_"] {
+    border-radius: 50% !important;
+}
+
+/* Round the rest of the profile pictures too: voice channels, member list, replies and
+ * mentions, reactions and the avatar stacks, which Discord rounds on its own and
+ * --unrounding squares */
+img[class*="avatar"],
+img[class*="Avatar"],
+[class*="userAvatar_"],
+[class*="voiceUser_"] [class*="avatar"],
+[class*="replyAvatar_"],
+[class*="avatarContainer_"] img,
+[class*="avatarStack_"] img,
+[class*="clickableAvatar_"] img,
+[class*="avatarWrapper_"] img,
+[class*="memberAvatar"],
+[class*="avatarDecoration"] {
+    border-radius: 50% !important;
+}
+
+/* Ping and mention counters as pills, not boxes */
+[class*="numberBadge_"],
+[class*="lowerBadge_"] > div,
+[class*="upperBadge_"] > div,
+[class*="mentionsBadge_"],
+[class*="unreadMentionsBar_"] {
+    border-radius: 9px !important;
 }

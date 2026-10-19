@@ -11,16 +11,16 @@
  * and for the launcher (d): list contacts, open a DM, call someone, send a DM, reply to the
  * last person you wrote to.
  *
- * Not tested yet (waits for the move to Linux). Discord's internal module and event
- * names change now and then; if something stops working, check them first.
+ * Discord's internal module and event names change now and then; if something stops
+ * working, check them first.
  */
 
 import { NavContextMenuPatchCallback } from "@api/ContextMenu";
 import { definePluginSettings } from "@api/Settings";
-import { openPrivateChannel, sendMessage } from "@utils/discord";
+import { sendMessage } from "@utils/discord";
 import definePlugin, { OptionType, PluginNative } from "@utils/types";
 import { findByPropsLazy, findStoreLazy } from "@webpack";
-import { ChannelStore, GuildStore, Menu, NavigationRouter, React, RelationshipStore, RestAPI, SelectedChannelStore, UserStore } from "@webpack/common";
+import { ChannelStore, GuildStore, Menu, MessageStore, NavigationRouter, React, ReadStateStore, RelationshipStore, RestAPI, SelectedChannelStore, UserStore } from "@webpack/common";
 
 const Native = VencordNative.pluginHelpers.ShellBridge as PluginNative<typeof import("./native")>;
 
@@ -73,8 +73,36 @@ function displayName(user: any): string {
     return user?.globalName ?? user?.username ?? "someone";
 }
 
+// PNG rather than Discord's default WebP, which Qt only reads with an extra image plugin
+function asPng(url: string): string {
+    return url.replace(/\.webp(\?|$)/, ".png$1");
+}
+
 function avatarOf(user: any): string {
-    return user?.getAvatarURL?.(undefined, 128) ?? "";
+    return asPng(user?.getAvatarURL?.(undefined, 128) ?? "");
+}
+
+// Group DM: its own icon, otherwise the first member's picture
+function groupIcon(channel: any): string {
+    if (channel?.icon)
+        return `https://cdn.discordapp.com/channel-icons/${channel.id}/${channel.icon}.png?size=128`;
+    return avatarOf(UserStore.getUser(channel?.recipients?.[0]));
+}
+
+function groupName(channel: any): string {
+    if (channel?.name)
+        return channel.name;
+    const names = (channel?.recipients ?? []).map((id: string) => displayName(UserStore.getUser(id)));
+    return names.slice(0, 3).join(", ") + (names.length > 3 ? ` +${names.length - 3}` : "");
+}
+
+// Brings the Vesktop window up when the shell opens something in it
+function focusWindow() {
+    try {
+        (window as any).VesktopNative?.win?.focus?.();
+    } catch {
+        // Not Vesktop
+    }
 }
 
 function channelName(channelId: string | null | undefined): string {
@@ -102,9 +130,11 @@ function handleCall(channelId: string, ringing: string[] | undefined) {
 
     if (ringsMe && !ringingCalls.has(channelId)) {
         const channel = ChannelStore.getChannel(channelId);
-        // In a DM the other recipient is the caller; group calls use the group name
+        // In a DM the other recipient is the caller; a group call shows the group and its icon
         const user = UserStore.getUser(channel?.recipients?.[0]);
-        const info = { caller: channel?.name || displayName(user), avatar: avatarOf(user) };
+        const info = channel?.type === 3
+            ? { caller: groupName(channel), avatar: groupIcon(channel), group: true }
+            : { caller: displayName(user), avatar: avatarOf(user), group: false };
         ringingCalls.set(channelId, info);
         Native.send({ type: "call", state: "ringing", ...info, channelId });
     } else if (!ringsMe && ringingCalls.has(channelId)) {
@@ -132,9 +162,54 @@ function endCall(channelId: string) {
 // The DM you last wrote in, for "d reply"; unknown until you write one after Discord started
 let lastDm: { userId: string; name: string; channelId: string } | null = null;
 
-function contactOf(userId: string, channelId: string | null) {
+// The newest message in each DM, for the launcher list. Discord only caches messages of
+// channels you opened, so DMs that arrive while the plugin runs are remembered here too.
+type LastMessage = { author: string; content: string; mine: boolean; time: number };
+const lastMessages = new Map<string, LastMessage>();
+
+function messageText(message: any): string {
+    return message?.content || (message?.attachments?.length ? "(attachment)" : message?.embeds?.length ? "(embed)" : message?.sticker_items?.length || message?.stickerItems?.length ? "(sticker)" : "");
+}
+
+function snowflakeTime(id: string | null | undefined): number {
+    return id ? Number(BigInt(id) >> 22n) + 1420070400000 : 0;
+}
+
+function lastMessageOf(channel: any): LastMessage | null {
+    const remembered = lastMessages.get(channel.id);
+    if (remembered && remembered.time >= snowflakeTime(channel.lastMessageId))
+        return remembered;
+    const cached = MessageStore.getMessages?.(channel.id)?._array;
+    const message = cached?.[cached.length - 1];
+    if (message) {
+        const me = UserStore.getCurrentUser()?.id;
+        return { author: displayName(message.author), content: messageText(message), mine: message.author?.id === me, time: snowflakeTime(message.id) };
+    }
+    return remembered ?? null;
+}
+
+// What the launcher shows about a DM: when it moved last, the newest message, unread state
+function activity(channel: any) {
+    return {
+        time: snowflakeTime(channel.lastMessageId),
+        last: lastMessageOf(channel),
+        unread: ReadStateStore.hasUnread?.(channel.id) ?? false,
+        mentions: ReadStateStore.getMentionCount?.(channel.id) ?? 0
+    };
+}
+
+function contactOf(userId: string, channel: any | null) {
     const user = UserStore.getUser(userId);
-    return { userId, name: displayName(user), username: user?.username ?? "", avatar: avatarOf(user), channelId };
+    return {
+        userId, name: displayName(user), username: user?.username ?? "", avatar: avatarOf(user), channelId: channel?.id ?? null, group: false,
+        ...(channel ? activity(channel) : { time: 0, last: null, unread: false, mentions: 0 })
+    };
+}
+
+// A group DM in the contact list: no user, the channel is what gets opened or called
+function groupContact(channel: any) {
+    const members = (channel.recipients?.length ?? 0) + 1;
+    return { userId: "", name: groupName(channel), username: `group · ${members} people`, avatar: groupIcon(channel), channelId: channel.id, group: true, ...activity(channel) };
 }
 
 function newestFirst(a: any, b: any) {
@@ -142,12 +217,12 @@ function newestFirst(a: any, b: any) {
     return x > y ? -1 : x < y ? 1 : 0;
 }
 
-// Open DMs, most recent first, then friends without a DM yet
+// Open DMs and group DMs, most recent first, then friends without a DM yet
 function contacts() {
     const channels = Object.values<any>(ChannelStore.getMutablePrivateChannels?.() ?? {})
-        .filter(c => c.type === 1 && c.recipients?.length)
+        .filter(c => (c.type === 1 || c.type === 3) && c.recipients?.length)
         .sort(newestFirst);
-    const out = channels.map(c => contactOf(c.recipients[0], c.id));
+    const out = channels.map(c => c.type === 3 ? groupContact(c) : contactOf(c.recipients[0], c));
     const seen = new Set(out.map(c => c.userId));
     for (const id of RelationshipStore.getFriendIDs?.() ?? [])
         if (!seen.has(id))
@@ -171,10 +246,11 @@ async function dmChannel(userId: string): Promise<string> {
     return body.id;
 }
 
-async function sendDm(userId: string, content: string) {
-    const to = displayName(UserStore.getUser(userId));
+// To a user (userId) or straight into a channel such as a group DM (channelId)
+async function sendDm(userId: string, content: string, channelId?: string) {
+    const to = channelId && !userId ? groupName(ChannelStore.getChannel(channelId)) : displayName(UserStore.getUser(userId));
     try {
-        const channelId = await dmChannel(userId);
+        channelId = channelId || await dmChannel(userId);
         await sendMessage(channelId, { content });
         Native.send({ type: "sent", ok: true, to });
     } catch (e) {
@@ -182,9 +258,23 @@ async function sendDm(userId: string, content: string) {
     }
 }
 
-async function callUser(userId: string) {
+// Straight to the DM channel; a friend without one gets a real 1:1 DM first. Vencord's
+// openPrivateChannel() hands Discord a bare user ID where it now wants { recipientIds },
+// which opened an empty group with only you in it.
+async function openDm(userId: string, channelId?: string) {
     try {
-        const channelId = await dmChannel(userId);
+        channelId = channelId || await dmChannel(userId);
+        focusWindow();
+        NavigationRouter.transitionTo(`/channels/@me/${channelId}`);
+    } catch (e) {
+        console.warn("[ShellBridge] open dm failed", e);
+    }
+}
+
+async function callUser(userId: string, channelId?: string) {
+    try {
+        channelId = channelId || await dmChannel(userId);
+        focusWindow();
         ChannelActions.selectVoiceChannel(channelId);
         CallActions.ring(channelId);
     } catch (e) {
@@ -198,13 +288,13 @@ function run(command: any) {
             Native.send({ type: "contacts", list: contacts(), lastDm: replyTarget() });
             break;
         case "open_dm":
-            openPrivateChannel(command.userId);
+            openDm(command.userId, command.channelId);
             break;
         case "call_user":
-            callUser(command.userId);
+            callUser(command.userId, command.channelId);
             break;
         case "send_dm":
-            sendDm(command.userId, String(command.content ?? ""));
+            sendDm(command.userId, String(command.content ?? ""), command.channelId);
             break;
         case "reply_last": {
             const target = replyTarget();
@@ -215,6 +305,7 @@ function run(command: any) {
             break;
         }
         case "accept_call":
+            focusWindow();
             ChannelActions.selectVoiceChannel(command.channelId);
             break;
         case "decline_call":
@@ -234,6 +325,7 @@ function run(command: any) {
             ChannelActions.selectVoiceChannel(command.channelId);
             break;
         case "open_channel":
+            focusWindow();
             NavigationRouter.transitionTo(`/channels/${command.guildId ?? "@me"}/${command.channelId}`);
             break;
         case "toggle_mute":
@@ -264,6 +356,14 @@ export default definePlugin({
             if (!me)
                 return;
             const channel = ChannelStore.getChannel(message.channel_id);
+            // Newest message per DM or group, for the launcher list
+            if (channel?.type === 1 || channel?.type === 3)
+                lastMessages.set(channel.id, {
+                    author: message.author?.global_name ?? message.author?.username ?? "someone",
+                    content: messageText(message),
+                    mine: message.author?.id === me.id,
+                    time: snowflakeTime(message.id)
+                });
             // Your own DM: remember who it went to, for "d reply" in the launcher
             if (message.author?.id === me.id) {
                 if (channel?.type === 1 && channel.recipients?.length) {

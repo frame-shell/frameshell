@@ -13,12 +13,12 @@ into its own shell.
 ## What's in it
 
 - A Quickshell shell: bar, control center with GoXLR faders and an app mixer, launcher,
-  lockscreen, notifications, OSD and a wallpaper app
+  lockscreen, notifications, OSD, screenshots and a wallpaper app
 - Tiling with workspaces, or an infinite canvas where windows float on an endless plane
 - A launcher that does more than apps: Spotify, Discord DMs, timers and alarms,
   emoji, files, ssh, clipboard, web search and Claude
 - Bridges to Discord (calls, voice joins, messages), the GoXLR and Spotify
-- Six themes for Ghostty, fish, Starship, Spotify, Vesktop, Zed, Dolphin, Zen and GRUB
+- Six themes for Ghostty, fish, Starship, Spotify, Vesktop, Zed, Dolphin, Zen, GRUB and the GoXLR's lights
 - `frame`, one command to install, update and switch themes
 
 ## Install
@@ -40,9 +40,12 @@ connected GoXLR gets its utility on its own.
 | Key | |
 |---|---|
 | Super+Space | launcher |
+| Super+V | clipboard history |
 | Super+C | control center |
 | Super+W | wallpapers |
 | Super+L | lock |
+| Print, Shift+Print | screenshot: region or window, whole screen |
+| Super+wheel | zoom out to every window (canvas layout) |
 | Super+E, Super+B, Super+Shift+E | Dolphin, Zen, Zed |
 | hold Super | all hotkeys on a keyboard map |
 
@@ -50,6 +53,7 @@ connected GoXLR gets its utility on its own.
 frame theme set sakura   # periwinkle, sakura, matcha, ember, lagoon, mono
 frame update             # pull and apply everything again
 frame status             # what is linked and what is missing
+frame login              # boot straight into the lockscreen, no separate greeter
 ```
 
 The details are in [docs](docs/): [the shell](docs/shell.md), [Spotify](docs/spotify.md), [themes](docs/themes.md)
