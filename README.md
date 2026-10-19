@@ -27,12 +27,13 @@ Dark blue-violet, TUI look, custom shell, everything built by hand.
 ## Planned features
 
 - [ ] Top bar with control center (PC stats, toggles, GoXLR faders) and app mixer for per-app routing (built, untested)
-- [ ] Spotify popup on song change (MPRIS), fading in at the top left, with playback controls
-- [ ] Media hover card on the bar: cover, progress, play/pause; next/previous only when the player supports it
+- [ ] Spotify popup on song change (MPRIS), fading in at the top left, with playback controls (built, untested)
+- [ ] Media hover card on the bar: cover, progress, play/pause; next/previous only when the player supports it (built, untested)
 - [ ] OSD module for GoXLR faders, mic mute, system volume and brightness
-- [ ] Custom notifications: TUI banners with actions and timer, bell with history, "silent" mode
-- [ ] Vencord plugin with a socket bridge to the shell: messages, voice joins/leaves, calls with
-  accept/decline, mute/deafen notices, and actions back into Discord (join, reply, unmute)
+- [ ] Custom notifications: TUI banners with actions and timer, bell with history, "silent" mode (built, untested)
+- [ ] Vencord plugin with a socket bridge to the shell: messages, voice joins/leaves (own and
+  watched channels), server events going live, calls with accept/decline, mute/deafen notices,
+  and actions back into Discord (built, test on Linux)
 - [ ] Later, once the setup runs on Linux and can be tested live:
   - Millennium plugin for Steam, same bridge: game invites with accept/decline, friends
     now playing, coming online, chat messages
@@ -85,8 +86,8 @@ roxy-dots/
 │   ├── controlcenter/ # Control center (session, toggles, faders, stats) and app mixer
 │   ├── launcher/      # Launcher (window, IPC), LauncherView (apps, calc, run, power)
 │   ├── osd/           # Overlays: GoXLR, mute, volume (planned)
-│   ├── media/         # Spotify popup, MPRIS (planned)
-│   └── notifications/ # Notification daemon (planned)
+│   ├── media/         # Spotify popup on song change (MPRIS)
+│   └── notifications/ # Daemon, popup cards, history; Discord bridge in services/
 ├── roxy               # CLI: install, remove, update, status
 ├── ghostty/           # Terminal config + color theme
 ├── fish/              # conf.d/roxy.fish: syntax colors, Starship, fastfetch greeting
@@ -95,7 +96,7 @@ roxy-dots/
 ├── spicetify/         # Spotify theme (color.ini + user.css)
 ├── themes/            # Color palettes (roxy.json, ...)
 ├── scripts/           # Theme generator and helpers
-├── vencord/           # Vesktop theme (system24 + Periwinkle palette)
+├── vencord/           # Vesktop theme (system24 + Periwinkle) and plugins/shellBridge
 ├── grub/roxy/         # GRUB theme, copied to /boot by `roxy grub`
 ├── assets/            # Characters, wallpapers per theme
 ├── PLAN.md
@@ -194,6 +195,33 @@ GoXLR notes: levels and mutes come from the goxlr-utility HTTP API
 (`http://localhost:14564`). The mixer finds the GoXLR devices by their PipeWire
 description; if yours are named differently (`wpctl status`), change `goxlrOutputs` and
 `goxlrInputs` in `config/Config.qml`.
+
+## Notifications and media
+
+The shell is the notification daemon (no mako/dunst/swaync needed; remove them from
+autostart). Popups stack top right with a timer that pauses on hover; critical ones and
+calls stay until handled. "silent" in the control center keeps popups away (calls and
+critical ones still show) and counts them on the bell in the bar; the bell opens the
+history (`qs ipc call notifications toggle`).
+
+Spotify gets a popup top left on every song change. Hovering the song in the bar shows a
+card with progress and play/pause; next/previous appear only when the player supports
+them over MPRIS (Spotify yes, a YouTube tab usually not).
+
+### Discord (Vencord plugin)
+
+`vencord/plugins/shellBridge` talks to the shell over `$XDG_RUNTIME_DIR/qs-discord.sock`:
+
+- DMs and mentions, with "open"
+- people joining or leaving your voice channel
+- channels you watch (right-click a voice channel → "Watch in shell"), with "join"
+- scheduled server events going live, with "join" for stage and voice events
+- incoming calls with "accept" and "decline"
+- your own mute and deafen changes, with "unmute"/"undeafen"
+
+It is a Vencord user plugin, so it needs a Vencord build: clone Vencord, copy the folder
+to `src/userplugins/shellBridge`, run `pnpm install && pnpm build`, then point Vesktop at
+that build (Vesktop settings → Vencord location) and enable ShellBridge. Not tested yet.
 
 ## Lockscreen
 
