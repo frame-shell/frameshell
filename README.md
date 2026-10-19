@@ -27,7 +27,7 @@ Dark navy blue, custom shell, everything built by hand.
 - [ ] Lockscreen
 - [ ] Wallpaper Engine as background
 - [ ] Infinite-canvas workflow
-- [ ] Vencord theme generated from the same color palette
+- [ ] Vencord theme generated from the same color palette (based on system24 theme)
 - [ ] Hotkey overlay (holding Super highlights bound keys), later on keyboard LEDs
 - [ ] Multi-theme switcher
 
