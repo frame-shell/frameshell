@@ -2,8 +2,10 @@
 # roxy – install and manage roxy-dots
 #
 #   roxy install [package...]   install dependencies and link configs (default: all)
+#   roxy update  [package...]   git pull, back up, relink and re-apply app themes
 #   roxy remove  <package...>   unlink configs (dependencies stay installed)
-#   roxy update                 git pull, then relink everything already linked
+#   roxy backup  [package...]   snapshot the current configs and app settings
+#   roxy restore [name|latest]  list backups, or put one back
 #   roxy status                 show what is linked and what is missing
 #
 # Options: -n/--dry-run (print what would happen), -y/--yes (no questions)
@@ -12,8 +14,9 @@ set -euo pipefail
 
 REPO="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
 STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/roxy-dots"
+BACKUP_ROOT="$STATE_DIR/backup"
 
-PACKAGES=(ghostty fish starship fastfetch spicetify)
+PACKAGES=(ghostty fish starship fastfetch spicetify vencord)
 
 # Distro packages each config needs; AUR ones go through paru/yay
 declare -A DEPS=(
@@ -22,10 +25,20 @@ declare -A DEPS=(
   [starship]="starship"
   [fastfetch]="fastfetch chafa"
   [spicetify]="spicetify-cli"
+  [vencord]="vesktop ttf-jetbrains-mono jq"
+)
+
+# App files outside the repo that roxy touches or that belong in a backup
+declare -A EXTRAS=(
+  [fish]=".config/fish/config.fish"
+  [spicetify]=".config/spicetify/config-xpui.ini"
+  [vencord]=".config/vesktop/settings/settings.json"
 )
 
 DRY_RUN=0
 ASSUME_YES=0
+NO_PULL=0
+LAST_BACKUP=""
 
 # ── Output ───────────────────────────────────────────────────
 
@@ -76,14 +89,17 @@ usage() {
   ${c_bold}Usage${c_reset}  roxy <command> [package...] [options]
 
   ${c_bold}Commands${c_reset}
-    install [pkg...]   install dependencies and link configs (default: all)
-    remove  <pkg...>   unlink configs, dependencies stay installed
-    update             git pull, then relink everything already linked
-    status             show what is linked and what is missing
+    install [pkg...]      install dependencies and link configs (default: all)
+    update  [pkg...]      git pull, back up, relink and re-apply app themes
+                          (run "roxy update spicetify" after a Spotify update)
+    remove  <pkg...>      unlink configs, dependencies stay installed
+    backup  [pkg...]      snapshot the current configs and app settings
+    restore [name|latest] list backups, or put one back
+    status                show what is linked and what is missing
 
   ${c_bold}Options${c_reset}
-    -n, --dry-run      print what would happen, change nothing
-    -y, --yes          do not ask for confirmation
+    -n, --dry-run         print what would happen, change nothing
+    -y, --yes             do not ask for confirmation
 
   ${c_bold}Packages${c_reset}  ${PACKAGES[*]}
 
@@ -114,6 +130,13 @@ aur_helper() {
   return 0
 }
 
+deps_of() {
+  local p d
+  for p in "$@"; do
+    for d in ${DEPS[$p]}; do echo "$d"; done
+  done
+}
+
 install_deps() {
   local missing=() p helper
   for p in "$@"; do has_pkg "$p" || missing+=("$p"); done
@@ -139,6 +162,13 @@ pkg_files() {
   (cd "$REPO/$1" && find . \( -type f -o -type l \) | sed 's|^\./||' | sort)
 }
 
+# Repo files plus the app files listed in EXTRAS
+managed_files() {
+  pkg_files "$1"
+  local extra
+  for extra in ${EXTRAS[$1]:-}; do echo "$extra"; done
+}
+
 # Prints linked, partial or missing
 link_state() {
   local pkg=$1 f total=0 linked=0
@@ -152,6 +182,40 @@ link_state() {
   elif ((linked > 0)); then echo partial
   else echo missing
   fi
+}
+
+installed_packages() {
+  local p
+  for p in "${PACKAGES[@]}"; do
+    [[ $(link_state "$p") == missing ]] || echo "$p"
+  done
+}
+
+new_backup_dir() {
+  echo "$BACKUP_ROOT/$(date +%Y%m%d-%H%M%S)-$1"
+}
+
+# Copies files (relative to $HOME, symlinks resolved) into a new backup
+snapshot_files() {
+  local reason=$1 f n=0
+  shift
+  LAST_BACKUP="$(new_backup_dir "$reason")"
+  for f in "$@"; do
+    [[ -e $HOME/$f ]] || continue
+    run mkdir -p "$LAST_BACKUP/$(dirname "$f")"
+    run cp -L "$HOME/$f" "$LAST_BACKUP/$f"
+    n=$((n + 1))
+  done
+  if ((n)); then ok "Backup $(basename "$LAST_BACKUP") ($n files)"; else info "Nothing to back up"; fi
+}
+
+snapshot_pkgs() {
+  local reason=$1 p f files=()
+  shift
+  for p in "$@"; do
+    while IFS= read -r f; do files+=("$f"); done < <(managed_files "$p")
+  done
+  snapshot_files "$reason" "${files[@]}"
 }
 
 # Moves existing files that would block stow into the backup folder
@@ -172,6 +236,12 @@ stow_pkg() {
   run stow --no-folding -d "$REPO" -t "$HOME" "$@"
 }
 
+# Backup folder names, newest first
+list_backups() {
+  [[ -d $BACKUP_ROOT ]] || return 0
+  find "$BACKUP_ROOT" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort -r
+}
+
 link_self() {
   local bin="$HOME/.local/bin/roxy"
   [[ "$(readlink -f "$bin" 2>/dev/null)" == "$REPO/roxy" ]] && return 0
@@ -180,7 +250,11 @@ link_self() {
   ok "roxy is now available as a command (~/.local/bin/roxy)"
 }
 
-# ── Per-package follow-up steps ──────────────────────────────
+run_post() {
+  if declare -F "post_$1" >/dev/null; then "post_$1"; fi
+}
+
+# ── Per-package follow-up steps (also run by update) ─────────
 
 post_fish() {
   if [[ ${SHELL##*/} != fish ]]; then
@@ -195,6 +269,7 @@ post_fastfetch() {
   fi
 }
 
+# Spotify updates wipe spicetify's changes, so this runs on every update
 post_spicetify() {
   if ! command -v spicetify >/dev/null && ((!DRY_RUN)); then
     warn "spicetify not found, skipping theme activation"
@@ -202,18 +277,43 @@ post_spicetify() {
   fi
   run spicetify config current_theme Roxy color_scheme Roxy
 
-  # The very first run needs a backup of the untouched Spotify files
-  local marker="$STATE_DIR/spicetify-backup"
-  local action=(apply)
-  [[ -f $marker ]] || action=(backup apply)
-  if run spicetify "${action[@]}"; then
-    run mkdir -p "$STATE_DIR"
-    run touch "$marker"
+  # apply fails on a fresh install or after a Spotify update; a new backup fixes both
+  if run spicetify apply || run spicetify backup apply; then
     ok "Spotify theme applied"
   else
-    warn "spicetify failed. Open Spotify once, log in, then run: roxy install spicetify"
+    warn "spicetify failed. Open Spotify once, log in, then run: roxy update spicetify"
+    info "Still broken after a Spotify update? Try: spicetify restore backup apply"
     info "Spotify from the AUR may need write access: https://spicetify.app/docs/advanced-usage/installation#spotify-installed-from-aur"
   fi
+}
+
+# Turns the theme on in Vesktop's settings. Vesktop has to be closed,
+# otherwise it writes its own copy back on exit.
+post_vencord() {
+  local settings="$HOME/.config/vesktop/settings/settings.json"
+  if [[ ! -f $settings ]]; then
+    info "Start Vesktop once, then enable the theme: Settings → Themes → Roxy"
+    return 0
+  fi
+  if command -v pgrep >/dev/null && pgrep -fi vesktop >/dev/null; then
+    warn "Vesktop is running. Close it and run roxy update vencord,"
+    info "or enable the theme by hand: Settings → Themes → Roxy"
+    return 0
+  fi
+  if ((DRY_RUN)); then
+    info "would enable roxy.theme.css in $settings"
+    return 0
+  fi
+  if ! command -v jq >/dev/null; then
+    warn "jq not found, enable the theme by hand: Settings → Themes → Roxy"
+    return 0
+  fi
+
+  local tmp
+  tmp="$(mktemp)"
+  jq '.enabledThemes = ((.enabledThemes // []) + ["roxy.theme.css"] | unique)' "$settings" >"$tmp"
+  mv "$tmp" "$settings"
+  ok "Theme enabled in Vesktop"
 }
 
 # ── Commands ─────────────────────────────────────────────────
@@ -228,28 +328,68 @@ cmd_install() {
   ((DRY_RUN)) && info "Dry run, nothing will be changed"
   confirm "Install and link these?" || exit 0
 
-  local deps=(stow) d
-  for p in "${pkgs[@]}"; do
-    read -ra d <<<"${DEPS[$p]}"
-    deps+=("${d[@]}")
-  done
   step "Dependencies"
-  install_deps "${deps[@]}"
+  mapfile -t deps < <(deps_of "${pkgs[@]}")
+  install_deps stow "${deps[@]}"
 
   local backup
-  backup="$STATE_DIR/backup/$(date +%Y%m%d-%H%M%S)"
+  backup="$(new_backup_dir install)"
   for p in "${pkgs[@]}"; do
     step "$p"
     backup_conflicts "$p" "$backup"
     stow_pkg -R "$p"
     ok "Config linked"
-    if declare -F "post_$p" >/dev/null; then "post_$p"; fi
+    run_post "$p"
   done
 
   step "roxy command"
   link_self
   [[ -d $backup ]] && info "Old configs were moved to $backup"
   printf '\n%sDone.%s Open a new terminal to see the changes.\n\n' "$c_ok" "$c_reset"
+}
+
+cmd_update() {
+  need_arch
+  local requested=("$@") pkgs=("$@")
+  ((${#pkgs[@]})) || mapfile -t pkgs < <(installed_packages)
+  ((${#pkgs[@]})) || die "Nothing installed yet, run: roxy install"
+
+  header
+  if ((!NO_PULL)); then
+    step "Dotfiles"
+    [[ -z $(git -C "$REPO" status --porcelain --untracked-files=no) ]] \
+      || die "The repo has local changes. Commit or stash them first (cd $REPO)."
+    local before after
+    before=$(git -C "$REPO" rev-parse HEAD)
+    run git -C "$REPO" pull --ff-only
+    after=$(git -C "$REPO" rev-parse HEAD)
+    if [[ $before == "$after" ]]; then
+      ok "Already up to date"
+    else
+      ok "Updated $(git -C "$REPO" rev-parse --short "$before") → $(git -C "$REPO" rev-parse --short "$after")"
+      # Continue with the freshly pulled version of this script
+      local flags=(--no-pull)
+      ((ASSUME_YES)) && flags+=(-y)
+      exec "$REPO/roxy" update "${flags[@]}" "${requested[@]}"
+    fi
+  fi
+
+  step "Backup"
+  snapshot_pkgs update "${pkgs[@]}"
+
+  step "Dependencies"
+  mapfile -t deps < <(deps_of "${pkgs[@]}")
+  install_deps "${deps[@]}"
+
+  local p
+  for p in "${pkgs[@]}"; do
+    step "$p"
+    backup_conflicts "$p" "$LAST_BACKUP"
+    stow_pkg -R "$p"
+    ok "Relinked"
+    run_post "$p"
+  done
+  printf '\n%sDone.%s\n\n' "$c_ok" "$c_reset"
 }
 
 cmd_remove() {
@@ -261,21 +401,63 @@ cmd_remove() {
     stow_pkg -D "$p"
     ok "Config unlinked"
   done
-  info "Backups of your old configs are in $STATE_DIR/backup/"
+  info "Backups of your old configs: roxy restore"
 }
 
-cmd_update() {
-  need_arch
-  step "Pulling latest changes"
-  run git -C "$REPO" pull --ff-only
-  local p
-  for p in "${PACKAGES[@]}"; do
-    [[ $(link_state "$p") == missing ]] && continue
-    step "$p"
-    stow_pkg -R "$p"
-    ok "Relinked"
-    if declare -F "post_$p" >/dev/null; then "post_$p"; fi
+cmd_backup() {
+  local pkgs=("$@")
+  ((${#pkgs[@]})) || pkgs=("${PACKAGES[@]}")
+  header
+  step "Backup"
+  snapshot_pkgs manual "${pkgs[@]}"
+  [[ -n $LAST_BACKUP && -d $LAST_BACKUP ]] && info "$LAST_BACKUP"
+  return 0
+}
+
+cmd_restore() {
+  local name=${1:-} b
+  header
+
+  if [[ -z $name ]]; then
+    step "Backups"
+    local found=0 count
+    while IFS= read -r b; do
+      found=1
+      count=$(find "$BACKUP_ROOT/$b" -type f | wc -l)
+      printf '  %-34s %s%s files%s\n' "$b" "$c_muted" "${count// /}" "$c_reset"
+    done < <(list_backups)
+    if ((found)); then
+      info "Put one back with: roxy restore <name>   (or: roxy restore latest)"
+    else
+      info "No backups yet. Create one with: roxy backup"
+    fi
+    return 0
+  fi
+
+  [[ $name == latest ]] && name=$(list_backups | head -n 1)
+  local src="$BACKUP_ROOT/$name"
+  [[ -n $name && -d $src ]] || die "No backup named ${1} (list them with: roxy restore)"
+
+  local files=() f
+  while IFS= read -r f; do files+=("$f"); done < <(cd "$src" && find . -type f | sed 's|^\./||' | sort)
+  ((${#files[@]})) || die "Backup $name is empty"
+
+  step "Restore $name"
+  for f in "${files[@]}"; do info "~/$f"; done
+  confirm "Put these ${#files[@]} files back? The current state is backed up first." || exit 0
+
+  step "Safety backup"
+  snapshot_files before-restore "${files[@]}"
+
+  step "Restoring"
+  for f in "${files[@]}"; do
+    run mkdir -p "$HOME/$(dirname "$f")"
+    # Drop roxy's symlink first so the copy does not land in the repo
+    [[ -L $HOME/$f ]] && run rm "$HOME/$f"
+    run cp "$src/$f" "$HOME/$f"
   done
+  ok "Restored $name"
+  info "Restored files are plain copies. To link a package again: roxy install <package>"
 }
 
 cmd_status() {
@@ -319,33 +501,49 @@ cmd_status() {
   fi
 
   [[ :$PATH: == *":$HOME/.local/bin:"* ]] || warn "~/.local/bin is not in PATH, the roxy command will not be found"
+
+  local backups
+  backups=$(list_backups | wc -l)
+  info "${backups// /} backups in $BACKUP_ROOT (roxy restore)"
   echo
 }
 
 # ── Main ─────────────────────────────────────────────────────
 
 main() {
-  local cmd=help args=()
+  local cmd=help args=() a
   if (($#)); then cmd=$1; shift; fi
   while (($#)); do
     case $1 in
       -n | --dry-run) DRY_RUN=1 ;;
       -y | --yes) ASSUME_YES=1 ;;
+      --no-pull) NO_PULL=1 ;;
       -h | --help) cmd=help ;;
       -*) die "Unknown option: $1" ;;
-      *) is_package "$1" || die "Unknown package: $1 (available: ${PACKAGES[*]})"; args+=("$1") ;;
+      *) args+=("$1") ;;
     esac
     shift
   done
 
   case $cmd in
+    install | i | update | up | remove | rm | uninstall | backup)
+      for a in "${args[@]}"; do
+        is_package "$a" || die "Unknown package: $a (available: ${PACKAGES[*]})"
+      done
+      ;;
+  esac
+
+  case $cmd in
     install | i) cmd_install "${args[@]}" ;;
+    update | up) cmd_update "${args[@]}" ;;
     remove | rm | uninstall) cmd_remove "${args[@]}" ;;
-    update | up) cmd_update ;;
+    backup) cmd_backup "${args[@]}" ;;
+    restore) cmd_restore "${args[@]}" ;;
     status | st | doctor) cmd_status ;;
-    help | -h | --help) usage ;;
+    help) usage ;;
     *) die "Unknown command: $cmd (try: roxy help)" ;;
   esac
 }
 
-main "$@"
+# Kept on one line: update may replace this file while it runs
+main "$@"; exit $?

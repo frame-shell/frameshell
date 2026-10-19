@@ -1,0 +1,160 @@
+/**
+ * @name Roxy
+ * @description Roxy Dark for Vencord/Vesktop, built on system24 (tui-style panels, monospace).
+ * @author vxnsin
+ * @version 1.0.0
+ * @source https://github.com/vxnsin/roxy-dots
+*/
+
+/* system24 by refact0r (MIT): https://github.com/refact0r/system24
+   Imported from its hosted build so fixes for Discord updates arrive automatically.
+   Everything below only sets system24 variables to the Roxy palette. */
+@import url('https://refact0r.github.io/system24/build/system24.css');
+
+body {
+    /* font */
+    --font: 'JetBrains Mono';
+    --code-font: 'JetBrains Mono';
+    font-weight: 400;
+    letter-spacing: -0.03ch;
+
+    /* sizes */
+    --gap: 10px;
+    --divider-thickness: 3px;
+    --border-thickness: 1px;
+    --border-hover-transition: 0.2s ease;
+
+    /* animations */
+    --animations: on;
+    --list-item-transition: 0.2s ease;
+    --dms-icon-svg-transition: 0.4s ease;
+
+    /* top bar: buttons move into the channel title bar */
+    --top-bar-height: var(--gap);
+    --top-bar-button-position: titlebar;
+    --top-bar-title-position: off;
+    --subtle-top-bar-title: off;
+
+    /* Hyprland draws no window controls anyway */
+    --custom-window-controls: off;
+    --window-control-size: 14px;
+
+    /* dms button */
+    --custom-dms-icon: off;
+    --dms-icon-svg-url: url('');
+    --dms-icon-svg-size: 90%;
+    --dms-icon-color-before: var(--icon-subtle);
+    --dms-icon-color-after: var(--white);
+    --custom-dms-background: color;
+    --dms-background-image-url: url('');
+    --dms-background-image-size: cover;
+    --dms-background-color: linear-gradient(70deg, var(--accent-3), var(--purple-2));
+
+    /* background image */
+    --background-image: off;
+    --background-image-url: url('');
+
+    /* transparency/blur (needs transparent bg colors) */
+    --transparency-tweaks: off;
+    --remove-bg-layer: off;
+    --panel-blur: off;
+    --blur-amount: 12px;
+    --bg-floating: var(--bg-3);
+
+    /* other */
+    --small-user-panel: on;
+
+    /* corners: square panels and avatars like a terminal */
+    --unrounding: on;
+    --round-pfp: off;
+    --remove-pfp-decor: off;
+
+    /* styling */
+    --custom-spotify-bar: on;
+    --ascii-titles: on;
+    --ascii-loader: system24;
+
+    /* panel labels in Roxy blue */
+    --panel-labels: on;
+    --label-color: var(--accent-2);
+    --label-font-weight: 500;
+}
+
+/* Roxy Dark palette, see themes/roxy.json */
+:root {
+    --colors: on;
+
+    /* text */
+    --text-0: var(--bg-4);   /* text on colored elements */
+    --text-1: #eef3ff;       /* bright white text */
+    --text-2: #dce6ff;       /* headings and important text */
+    --text-3: #b8c4e6;       /* normal text */
+    --text-4: #7a89b3;       /* icon buttons and channels */
+    --text-5: #56658f;       /* muted channels and timestamps */
+
+    /* backgrounds */
+    --bg-1: #233061;         /* dark buttons when clicked */
+    --bg-2: #1a2447;         /* dark buttons */
+    --bg-3: #111833;         /* gaps, secondary elements */
+    --bg-4: #0a0f1f;         /* main background */
+    --hover: rgb(143 176 240 / 0.08);
+    --active: rgb(143 176 240 / 0.14);
+    --active-2: rgb(143 176 240 / 0.2);
+    --message-hover: var(--hover);
+
+    /* accent: Roxy blue instead of system24's purple */
+    --accent-1: #8fb0f0;     /* links and accent text */
+    --accent-2: #4a7fe0;     /* small accent elements */
+    --accent-3: #4a7fe0;     /* accent buttons */
+    --accent-4: #5d8de6;     /* accent buttons hovered */
+    --accent-5: #3d6cc4;     /* accent buttons clicked */
+    --accent-new: var(--red-2);
+    --mention: linear-gradient(to right, color-mix(in hsl, var(--accent-2), transparent 88%) 40%, transparent);
+    --mention-hover: linear-gradient(to right, color-mix(in hsl, var(--accent-2), transparent 93%) 40%, transparent);
+    --reply: linear-gradient(to right, color-mix(in hsl, var(--text-3), transparent 90%) 40%, transparent);
+    --reply-hover: linear-gradient(to right, color-mix(in hsl, var(--text-3), transparent 95%) 40%, transparent);
+
+    /* status */
+    --online: var(--green-2);
+    --dnd: var(--red-2);
+    --idle: var(--yellow-2);
+    --streaming: var(--purple-2);
+    --offline: var(--text-5);
+
+    /* borders */
+    --border-light: #141c3a;
+    --border: #1a2447;
+    --border-hover: var(--accent-2);
+    --button-border: rgb(220 230 255 / 0.08);
+
+    /* base colors, matching the terminal ANSI palette */
+    --red-1: #ff8fa6;
+    --red-2: #ff6b8a;
+    --red-3: #f0577a;
+    --red-4: #db4a6c;
+    --red-5: #c43e5f;
+
+    --green-1: #8ff0cb;
+    --green-2: #6ee0b6;
+    --green-3: #5ccca3;
+    --green-4: #4bb690;
+    --green-5: #3ba07e;
+
+    --blue-1: #8ae0f2;
+    --blue-2: #5ccfe6;
+    --blue-3: #4bbbd2;
+    --blue-4: #3ea6bd;
+    --blue-5: #3291a6;
+
+    --yellow-1: #ffdca0;
+    --yellow-2: #f2c97d;
+    --yellow-3: #e0b566;
+    --yellow-4: #cca154;
+    --yellow-5: #b88d44;
+
+    --purple-1: #cbb2ff;
+    --purple-2: #b394f5;
+    --purple-3: #9f7fe8;
+    --purple-4: #8b6bd6;
+    --purple-5: #775ac2;
+}

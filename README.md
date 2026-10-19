@@ -16,7 +16,7 @@ Dark navy blue, custom shell, everything built by hand.
 | Shell (bar, OSD, popups, launcher, lockscreen) | Quickshell (QML) |
 | Wallpaper | linux-wallpaperengine / mpvpaper |
 | Audio interface | GoXLR via `goxlr-utility` |
-| Discord | Vesktop (Vencord) with a custom theme |
+| Discord | Vesktop (Vencord) with the Roxy theme, built on system24 |
 | Spotify | Spicetify with the Roxy theme |
 | Terminal | Ghostty |
 | Terminal shell | fish + Starship |
@@ -80,7 +80,7 @@ roxy-dots/
 ├── spicetify/         # Spotify theme (color.ini + user.css)
 ├── themes/            # Color palettes (roxy.json, ...)
 ├── scripts/           # Theme generator and helpers
-├── vencord/           # Discord theme (CSS)
+├── vencord/           # Vesktop theme (system24 + Roxy colors)
 ├── assets/            # Characters, wallpapers per theme
 ├── PLAN.md
 └── README.md
@@ -101,20 +101,30 @@ the Spotify theme and puts `roxy` into `~/.local/bin`.
 roxy status                 # what is linked, what is missing
 roxy install starship fish  # only some packages
 roxy install --dry-run      # show what would happen
-roxy update                 # git pull + relink
+roxy update                 # git pull, backup, relink, re-apply app themes
+roxy update spicetify       # after a Spotify update wiped the theme
 roxy remove spicetify       # unlink a package
+roxy backup                 # snapshot configs and app settings
+roxy restore                # list backups
+roxy restore latest         # put the newest one back
 ```
 
-Packages: `ghostty`, `fish`, `starship`, `fastfetch`, `spicetify`.
+Backups live in `~/.local/state/roxy-dots/backup/` (one folder per snapshot, named by date
+and reason). `install` moves conflicting configs there, `update` and `restore` take a
+snapshot before they change anything. `update` also updates the `roxy` CLI itself.
+
+Packages: `ghostty`, `fish`, `starship`, `fastfetch`, `spicetify`, `vencord`.
 Each package folder mirrors the home directory (`ghostty/.config/ghostty/...`).
 
 Manual steps:
 
 - **fastfetch logo:** put any PNG at `assets/roxy.png`; fastfetch renders it as ASCII art.
 - **Spotify:** install and open Spotify once before `roxy install spicetify`.
+- **Vesktop:** start it once, then close it before `roxy install vencord` so the theme can be
+  switched on automatically (otherwise: Settings → Themes → Roxy).
 - **Fonts:** JetBrains Mono (built into Ghostty) and Lexend for the Spotify theme.
 
-Not covered by `roxy` yet: `quickshell`, `hyprland`, `goxlr-utility`, `vesktop`.
+Not covered by `roxy` yet: `quickshell`, `hyprland`, `goxlr-utility`.
 
 ## Note on assets
 
@@ -125,6 +135,7 @@ The `assets/` folder is therefore listed in `.gitignore`.
 
 - [caelestia-dots](https://github.com/caelestia-dots) (soramane)
 - [dots-hyprland](https://github.com/end-4/dots-hyprland) (end_4)
+- [system24](https://github.com/refact0r/system24) (refact0r, MIT), base of the Vencord theme
 - [quickshell.org](https://quickshell.org)
 
 ## License
