@@ -82,23 +82,28 @@ Generated: Quickshell (`config/Theme.qml`), Ghostty, fish syntax colors, Starshi
 (`color.ini`), Vesktop, Hyprland window borders, Zed, Dolphin (KDE color scheme and qt6ct
 palette), Zen and GRUB (`theme.txt`; `frame grub` draws the 1px frame images itself).
 
-## Planned features
+## Features
 
-- [ ] Top bar with control center (PC stats, toggles, GoXLR faders) and app mixer for per-app routing (built, untested)
-- [ ] Spotify popup on song change (MPRIS), fading in at the top left, with playback controls (built, untested)
-- [ ] Calendar under the clock on hover, with ISO weeks (built, untested)
-- [ ] Media hover card on the bar: cover, progress, play/pause; next/previous only when the player supports it (built, untested)
-- [ ] OSD for GoXLR faders and mutes, the GoXLR mic button, default output volume and keyboard layout (built, untested)
-- [ ] Custom notifications: TUI banners with actions and timer, bell with history, "silent" mode (built, untested)
-- [ ] Vencord plugin with a socket bridge to the shell: messages, voice joins/leaves (own and
+Built, but not run on Linux yet; the first real test happens after the move to CachyOS.
+
+- [x] Top bar with control center (PC stats, toggles, GoXLR faders) and app mixer for per-app routing
+- [x] Spotify popup on song change (MPRIS), fading in at the top left, with playback controls
+- [x] Calendar under the clock on hover, with ISO weeks
+- [x] Media hover card on the bar: cover, progress, play/pause; next/previous only when the player supports it
+- [x] OSD for GoXLR faders and mutes, the GoXLR mic button, default output volume and keyboard layout
+- [x] Notifications: TUI banners with actions and timer, bell with history, "silent" mode
+- [x] Vencord plugin with a socket bridge to the shell: messages, voice joins/leaves (own and
   watched channels), server events going live, calls with accept/decline and missed-call
-  notices, mute/deafen notices, and actions back into Discord (built, test on Linux)
-- [ ] Launcher: fuzzy app search, calculator, run and power modes (built, untested)
-- [ ] Lockscreen: blurred desktop snapshot, weather panel, media, fade animation (built, untested)
-- [ ] Wallpapers: Wallpaper Engine scenes, videos and images, picked in their own app (built, untested)
-- [ ] Six themes for every app, switched with `frame theme set` (built, untested)
+  notices, mute/deafen notices, and actions back into Discord
+- [x] Launcher: fuzzy app search, calculator, run and power modes
+- [x] Lockscreen: blurred desktop snapshot, weather panel, media, fade animation
+- [x] Wallpapers: Wallpaper Engine scenes, videos and images, picked in their own app
+- [x] Six themes for every app, switched with `frame theme set`
+
+## Planned
+
 - [ ] Hotkey overlay (holding Super highlights bound keys), later on keyboard LEDs
-- [ ] Later, once the setup runs on Linux and can be tested live:
+- [ ] Once the setup runs on Linux and can be tested live:
   - Millennium plugin for Steam, same bridge: game invites with accept/decline, friends
     now playing, coming online, chat messages
   - Steam theme for Millennium in the TUI look, generated from the themes
