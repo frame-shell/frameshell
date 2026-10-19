@@ -18,6 +18,7 @@ STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/roxy-dots"
 BACKUP_ROOT="$STATE_DIR/backup"
 GRUB_THEME_DIR="/boot/grub/themes/roxy"
 GRUB_DEFAULT_FILE="/etc/default/grub"
+VENCORD_SRC="${XDG_DATA_HOME:-$HOME/.local/share}/roxy-dots/vencord"
 
 PACKAGES=(ghostty fish starship fastfetch spicetify vencord quickshell hypr)
 
@@ -28,7 +29,7 @@ declare -A DEPS=(
   [starship]="starship"
   [fastfetch]="fastfetch chafa"
   [spicetify]="spicetify-cli ttf-jetbrains-mono"
-  [vencord]="vesktop ttf-jetbrains-mono jq"
+  [vencord]="vesktop ttf-jetbrains-mono jq git nodejs pnpm"
   [quickshell]="quickshell ttf-jetbrains-mono ttf-jetbrains-mono-nerd wl-clipboard libpulse pciutils"
   [hypr]="hypridle"
 )
@@ -294,36 +295,149 @@ post_spicetify() {
   fi
 }
 
-# Turns the theme on in Vesktop's settings. Vesktop has to be closed,
-# otherwise it writes its own copy back on exit.
+# jq in place: json_edit <file> [jq options…] <filter>
+json_edit() {
+  local file=$1 tmp
+  shift
+  tmp="$(mktemp)"
+  jq "$@" "$file" >"$tmp" && mv "$tmp" "$file"
+}
+
+# ── Vencord build with the ShellBridge plugin ────────────────
+# Vesktop ships its own Vencord, but user plugins need a self-built one. roxy keeps a
+# clone in ~/.local/share/roxy-dots/vencord and rebuilds only when Vencord or the
+# plugin changed.
+
+vencord_plugin_hash() {
+  (cd "$REPO/vencord/plugins" && find shellBridge -type f -print0 | sort -z | xargs -0 sha1sum) | sha1sum | cut -c1-12
+}
+
+vencord_build() {
+  step "Vencord with ShellBridge"
+  if [[ -d $VENCORD_SRC/.git ]]; then
+    run git -C "$VENCORD_SRC" pull --ff-only --quiet || warn "Could not update Vencord, building the version that is there"
+  else
+    info "Getting Vencord (first time only)"
+    run mkdir -p "$(dirname "$VENCORD_SRC")"
+    run git clone --depth 1 --quiet https://github.com/Vendicated/Vencord.git "$VENCORD_SRC"
+  fi
+
+  local marker="$STATE_DIR/vencord-build" wanted=""
+  [[ -d $VENCORD_SRC/.git ]] && wanted="$(git -C "$VENCORD_SRC" rev-parse --short HEAD)-$(vencord_plugin_hash)"
+  if [[ -n $wanted && -d $VENCORD_SRC/dist && -f $marker && "$(cat "$marker")" == "$wanted" ]]; then
+    ok "Vencord build up to date"
+    return 0
+  fi
+
+  run rm -rf "$VENCORD_SRC/src/userplugins/shellBridge"
+  run mkdir -p "$VENCORD_SRC/src/userplugins"
+  run cp -r "$REPO/vencord/plugins/shellBridge" "$VENCORD_SRC/src/userplugins/shellBridge"
+  info "Building Vencord, this takes about a minute"
+  if run pnpm -C "$VENCORD_SRC" install --frozen-lockfile --silent && run pnpm -C "$VENCORD_SRC" build; then
+    if ((!DRY_RUN)); then
+      mkdir -p "$STATE_DIR"
+      echo "$wanted" >"$marker"
+    fi
+    ok "Vencord built with ShellBridge"
+  else
+    warn "Vencord build failed, Vesktop keeps its own Vencord (the theme still works)"
+    return 1
+  fi
+}
+
+# Builds Vencord with ShellBridge, points Vesktop at it and turns on theme and plugin.
+# Vesktop has to be closed while its settings are written, otherwise it writes its own
+# copy back on exit.
 post_vencord() {
-  local settings="$HOME/.config/vesktop/settings/settings.json"
-  if [[ ! -f $settings ]]; then
-    info "Start Vesktop once, then enable the theme: Settings → Themes → Roxy"
+  local built=0
+  if command -v pnpm >/dev/null || ((DRY_RUN)); then
+    vencord_build && built=1
+  else
+    warn "pnpm not found, skipping the ShellBridge plugin (the theme still works)"
+  fi
+
+  local vesktop="$HOME/.config/vesktop/settings.json"
+  local vencord="$HOME/.config/vesktop/settings/settings.json"
+  if [[ ! -f $vencord ]]; then
+    info "Start Vesktop once, close it, then run: roxy update vencord"
     return 0
   fi
   if command -v pgrep >/dev/null && pgrep -fi vesktop >/dev/null; then
-    warn "Vesktop is running. Close it and run roxy update vencord,"
-    info "or enable the theme by hand: Settings → Themes → Roxy"
+    warn "Vesktop is running. Close it and run: roxy update vencord"
     return 0
   fi
   if ((DRY_RUN)); then
-    info "would enable roxy.theme.css in $settings"
+    info "would enable the theme and ShellBridge in $vencord"
+    info "would set the Vencord location in $vesktop to $VENCORD_SRC/dist"
     return 0
   fi
   if ! command -v jq >/dev/null; then
-    warn "jq not found, enable the theme by hand: Settings → Themes → Roxy"
+    warn "jq not found, enable it by hand: Settings → Themes → Roxy, Plugins → ShellBridge"
     return 0
   fi
 
-  local tmp
-  tmp="$(mktemp)"
-  jq '.enabledThemes = ((.enabledThemes // []) + ["roxy.theme.css"] | unique)' "$settings" >"$tmp"
-  mv "$tmp" "$settings"
-  ok "Theme enabled in Vesktop"
+  json_edit "$vencord" '.enabledThemes = ((.enabledThemes // []) + ["roxy.theme.css"] | unique)'
+  ok "Theme enabled"
+  if ((built)) || [[ -d $VENCORD_SRC/dist ]]; then
+    json_edit "$vencord" '.plugins.ShellBridge.enabled = true'
+    [[ -f $vesktop ]] || echo '{}' >"$vesktop"
+    # Vesktop's "Vencord location": the dist folder of the build
+    json_edit "$vesktop" --arg dir "$VENCORD_SRC/dist" '.vencordDir = $dir'
+    ok "ShellBridge enabled, Vesktop uses the roxy Vencord build"
+    info "Start Vesktop to load it"
+  fi
+  return 0
+}
+
+# ── Notification daemons ─────────────────────────────────────
+# Only one program can own the notification service on D-Bus. mako, dunst or
+# swaync would take the notifications away from the shell.
+
+notification_conflicts() {
+  local d
+  for d in mako dunst swaync; do
+    if { command -v pgrep >/dev/null && pgrep -x "$d" >/dev/null; } \
+      || systemctl --user is-enabled "$d.service" >/dev/null 2>&1 \
+      || grep -qsE "^[[:space:]]*exec(-once)?[[:space:]]*=.*\b$d\b" "$HOME"/.config/hypr/*.conf; then
+      echo "$d"
+    fi
+  done
+  return 0
+}
+
+# Stops them, disables their user services and comments out their exec-once lines
+disable_notification_daemons() {
+  local d f files=()
+  for f in "$HOME"/.config/hypr/*.conf; do
+    [[ -f $f && ! -L $f ]] && files+=("${f#"$HOME"/}")
+  done
+  snapshot_files notification-daemons "${files[@]}"
+  for d in "$@"; do
+    if systemctl --user is-enabled "$d.service" >/dev/null 2>&1; then
+      run systemctl --user disable --now "$d.service" || true
+    fi
+    if command -v pkill >/dev/null; then
+      run pkill -x "$d" || true
+    fi
+    for f in "${files[@]}"; do
+      run sed -i -E "s|^([[:space:]]*exec(-once)?[[:space:]]*=.*\\b$d\\b.*)|# roxy: \\1|" "$HOME/$f"
+    done
+  done
+  ok "Turned off: $* (roxy restore brings them back)"
 }
 
 post_quickshell() {
+  local found=()
+  mapfile -t found < <(notification_conflicts)
+  if ((${#found[@]})); then
+    warn "Other notification daemons found: ${found[*]}"
+    info "Only one program can show notifications; for the shell's popups they have to go"
+    if confirm "Turn them off?"; then
+      disable_notification_daemons "${found[@]}"
+    else
+      info "Left them on; notifications go to ${found[0]} instead of the shell"
+    fi
+  fi
   info "Quickshell reloads on its own. Test the lockscreen with: qs ipc call lock lock"
   if command -v pgrep >/dev/null && ! pgrep -x qs >/dev/null && ! pgrep -x quickshell >/dev/null; then
     info "Quickshell is not running yet; start it with: qs -d (or log in again)"
@@ -656,6 +770,16 @@ cmd_status() {
 
   if [[ -f /boot/grub/grub.cfg ]]; then
     [[ -d $GRUB_THEME_DIR ]] && ok "GRUB theme installed" || info "GRUB theme not installed (roxy grub)"
+  fi
+
+  local conflicts
+  conflicts=$(notification_conflicts | tr '\n' ' ')
+  if [[ -n ${conflicts// /} ]]; then
+    warn "Other notification daemons active: ${conflicts}(roxy install quickshell turns them off)"
+  fi
+
+  if [[ -d $VENCORD_SRC/dist ]]; then
+    ok "Vencord build with ShellBridge ($(cat "$STATE_DIR/vencord-build" 2>/dev/null || echo "unknown version"))"
   fi
 
   local backups

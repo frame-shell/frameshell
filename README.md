@@ -219,9 +219,14 @@ them over MPRIS (Spotify yes, a YouTube tab usually not).
 - incoming calls with "accept" and "decline"
 - your own mute and deafen changes, with "unmute"/"undeafen"
 
-It is a Vencord user plugin, so it needs a Vencord build: clone Vencord, copy the folder
-to `src/userplugins/shellBridge`, run `pnpm install && pnpm build`, then point Vesktop at
-that build (Vesktop settings → Vencord location) and enable ShellBridge. Not tested yet.
+`roxy install vencord` sets it up: it clones Vencord to `~/.local/share/roxy-dots/vencord`,
+adds ShellBridge, builds it with pnpm, points Vesktop at that build and turns on theme
+and plugin (close Vesktop for that step). `roxy update` rebuilds only when Vencord or the
+plugin changed. Not tested yet.
+
+`roxy install quickshell` also looks for mako, dunst and swaync (running, as a user
+service or in `exec-once`) and offers to turn them off, since only one program can
+receive notifications. `roxy restore` brings them back.
 
 ## Lockscreen
 
