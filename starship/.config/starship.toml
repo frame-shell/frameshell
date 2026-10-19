@@ -1,6 +1,6 @@
 "$schema" = "https://starship.rs/config-schema.json"
 
-# Roxy Dark prompt, TUI style
+# Periwinkle prompt, TUI style
 # The first line reads like the top edge of a panel:
 #   ┌[~/roxy-dots]─[ main +12 -3]──────────────[ v3.12.4]─[09:41]
 #   └─❯
@@ -53,13 +53,13 @@ $line_break\
 $character"""
 
 [palettes.roxy]
-bg = "#0a0f1f"
-frame = "#56658f"
-primary = "#4a7fe0"
-secondary = "#8fb0f0"
-text = "#dce6ff"
-muted = "#7a89b3"
-danger = "#ff6b8a"
+bg = "#0b0c1f"
+frame = "#545b96"
+primary = "#5d6fe8"
+secondary = "#93a4f7"
+text = "#e1e4ff"
+muted = "#8086b8"
+danger = "#ff6b9a"
 green = "#6ee0b6"
 yellow = "#f2c97d"
 

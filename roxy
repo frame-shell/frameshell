@@ -46,13 +46,13 @@ LAST_BACKUP=""
 # ── Output ───────────────────────────────────────────────────
 
 if [[ -t 1 ]]; then
-  c_text=$'\e[38;2;220;230;255m'
-  c_primary=$'\e[38;2;74;127;224m'
-  c_secondary=$'\e[38;2;143;176;240m'
-  c_muted=$'\e[38;2;122;137;179m'
+  c_text=$'\e[38;2;225;228;255m'
+  c_primary=$'\e[38;2;93;111;232m'
+  c_secondary=$'\e[38;2;147;164;247m'
+  c_muted=$'\e[38;2;128;134;184m'
   c_ok=$'\e[38;2;110;224;182m'
   c_warn=$'\e[38;2;242;201;125m'
-  c_danger=$'\e[38;2;255;107;138m'
+  c_danger=$'\e[38;2;255;107;154m'
   c_bold=$'\e[1m'
   c_reset=$'\e[0m'
 else
@@ -60,8 +60,8 @@ else
 fi
 
 header() {
-  printf '\n  %s%sroxy%s%s-%s%s%sdots%s  %sCachyOS · Hyprland · Quickshell%s\n\n' \
-    "$c_bold" "$c_text" "$c_reset" "$c_primary" "$c_reset" "$c_bold" "$c_secondary" "$c_reset" "$c_muted" "$c_reset"
+  printf '\n  %s%sroxy%s  %sdotfiles · CachyOS · Hyprland%s\n\n' \
+    "$c_bold" "$c_primary" "$c_reset" "$c_muted" "$c_reset"
 }
 
 step() { printf '\n%s●%s %s%s%s\n' "$c_primary" "$c_reset" "$c_bold" "$*" "$c_reset"; }

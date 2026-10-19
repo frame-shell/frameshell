@@ -1,27 +1,27 @@
-# Roxy Dark – colors from themes/roxy.json
+# Periwinkle – colors from themes/roxy.json
 
-background = #0a0f1f
-foreground = #dce6ff
+background = #0b0c1f
+foreground = #e1e4ff
 
-cursor-color = #8fb0f0
-cursor-text = #0a0f1f
+cursor-color = #93a4f7
+cursor-text = #0b0c1f
 
-selection-background = #1a2447
-selection-foreground = #dce6ff
+selection-background = #1e2256
+selection-foreground = #e1e4ff
 
-palette = 0=#111833
-palette = 1=#ff6b8a
+palette = 0=#13153a
+palette = 1=#ff6b9a
 palette = 2=#6ee0b6
 palette = 3=#f2c97d
-palette = 4=#4a7fe0
-palette = 5=#b394f5
+palette = 4=#5d6fe8
+palette = 5=#a48cf2
 palette = 6=#5ccfe6
-palette = 7=#b8c4e6
-palette = 8=#56658f
-palette = 9=#ff8fa6
+palette = 7=#bcc1ea
+palette = 8=#545b96
+palette = 9=#ff8fb1
 palette = 10=#8ff0cb
 palette = 11=#ffdca0
-palette = 12=#8fb0f0
-palette = 13=#cbb2ff
+palette = 12=#93a4f7
+palette = 13=#c3b0ff
 palette = 14=#8ae0f2
-palette = 15=#dce6ff
+palette = 15=#e1e4ff

@@ -2,16 +2,16 @@
   <title id="t">roxy-dots</title>
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#0a0f1f"/>
-      <stop offset="1" stop-color="#111833"/>
+      <stop offset="0" stop-color="#0b0c1f"/>
+      <stop offset="1" stop-color="#13153a"/>
     </linearGradient>
     <radialGradient id="glow" cx="1030" cy="170" r="420" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#4a7fe0" stop-opacity="0.38"/>
-      <stop offset="0.55" stop-color="#4a7fe0" stop-opacity="0.08"/>
-      <stop offset="1" stop-color="#4a7fe0" stop-opacity="0"/>
+      <stop offset="0" stop-color="#5d6fe8" stop-opacity="0.38"/>
+      <stop offset="0.55" stop-color="#5d6fe8" stop-opacity="0.08"/>
+      <stop offset="1" stop-color="#5d6fe8" stop-opacity="0"/>
     </radialGradient>
     <pattern id="dots" width="22" height="22" patternUnits="userSpaceOnUse">
-      <circle cx="11" cy="11" r="1.3" fill="#8fb0f0"/>
+      <circle cx="11" cy="11" r="1.3" fill="#93a4f7"/>
     </pattern>
     <radialGradient id="dotFade" cx="1030" cy="170" r="560" gradientUnits="userSpaceOnUse">
       <stop offset="0" stop-color="#fff" stop-opacity="0.24"/>
@@ -21,12 +21,12 @@
       <rect width="1280" height="360" fill="url(#dotFade)"/>
     </mask>
     <linearGradient id="hat" x1="0" y1="1" x2="1" y2="0">
-      <stop offset="0" stop-color="#4a7fe0"/>
-      <stop offset="1" stop-color="#8fb0f0"/>
+      <stop offset="0" stop-color="#5d6fe8"/>
+      <stop offset="1" stop-color="#93a4f7"/>
     </linearGradient>
     <linearGradient id="drop" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#8fb0f0"/>
-      <stop offset="1" stop-color="#4a7fe0"/>
+      <stop offset="0" stop-color="#93a4f7"/>
+      <stop offset="1" stop-color="#5d6fe8"/>
     </linearGradient>
     <clipPath id="card">
       <rect width="1280" height="360" rx="28"/>
@@ -39,15 +39,15 @@
     <rect width="1280" height="360" fill="url(#dots)" mask="url(#dotMask)"/>
 
     <!-- Water magic: ripples, drop, splashes -->
-    <g fill="none" stroke="#8fb0f0" stroke-width="2">
+    <g fill="none" stroke="#93a4f7" stroke-width="2">
       <ellipse cx="1030" cy="262" rx="70" ry="16" stroke-opacity="0.55"/>
       <ellipse cx="1030" cy="262" rx="135" ry="31" stroke-opacity="0.32"/>
       <ellipse cx="1030" cy="262" rx="205" ry="47" stroke-opacity="0.16"/>
       <ellipse cx="1030" cy="262" rx="280" ry="64" stroke-opacity="0.07"/>
     </g>
     <path d="M1030 92 C1018 112 990 150 990 178 A40 40 0 0 0 1070 178 C1070 150 1042 112 1030 92 Z" fill="url(#drop)"/>
-    <path d="M1009 172 A22 22 0 0 0 1020 196" fill="none" stroke="#dce6ff" stroke-opacity="0.7" stroke-width="5" stroke-linecap="round"/>
-    <g fill="#8fb0f0">
+    <path d="M1009 172 A22 22 0 0 0 1020 196" fill="none" stroke="#e1e4ff" stroke-opacity="0.7" stroke-width="5" stroke-linecap="round"/>
+    <g fill="#93a4f7">
       <circle cx="966" cy="238" r="5" fill-opacity="0.7"/>
       <circle cx="1098" cy="230" r="4" fill-opacity="0.6"/>
       <circle cx="1116" cy="248" r="3" fill-opacity="0.45"/>
@@ -55,7 +55,7 @@
     </g>
 
     <!-- Sparkles -->
-    <g fill="#dce6ff">
+    <g fill="#e1e4ff">
       <path d="M1170 56 Q1170 70 1184 70 Q1170 70 1170 84 Q1170 70 1156 70 Q1170 70 1170 56 Z" fill-opacity="0.9"/>
       <path d="M900 80 Q900 90 910 90 Q900 90 900 100 Q900 90 890 90 Q900 90 900 80 Z" fill-opacity="0.75"/>
       <path d="M1204 182 Q1204 190 1212 190 Q1204 190 1204 198 Q1204 190 1196 190 Q1204 190 1204 182 Z" fill-opacity="0.6"/>
@@ -65,14 +65,14 @@
 
     <!-- Wordmark: hand-built from strokes, no font needed -->
     <g transform="translate(9 34) scale(0.62)" fill="none" stroke-width="20" stroke-linecap="round" stroke-linejoin="round">
-      <g stroke="#dce6ff">
+      <g stroke="#e1e4ff">
         <path d="M150 120 V230 M150 172 A52 52 0 0 1 202 120"/>
         <circle cx="287" cy="175" r="55"/>
         <path d="M372 120 L472 230 M472 120 L372 230"/>
         <path d="M502 120 L552 228 M602 120 L527 285"/>
       </g>
-      <path d="M640 185 H676" stroke="#4a7fe0"/>
-      <g stroke="#8fb0f0">
+      <path d="M640 185 H676" stroke="#5d6fe8"/>
+      <g stroke="#93a4f7">
         <circle cx="781" cy="175" r="55"/>
         <path d="M836 70 V230"/>
         <circle cx="941" cy="175" r="55"/>
@@ -83,23 +83,23 @@
       <!-- Witch hat on the r -->
       <g stroke="none" transform="translate(176 106) scale(1.25) translate(-176 -106)">
         <path d="M146 104 C160 80 170 58 184 44 C196 32 214 26 238 28 C218 38 208 52 204 70 C201 82 202 92 206 98 Z" fill="url(#hat)"/>
-        <path d="M151 95 Q178 89 205 87" fill="none" stroke="#0a0f1f" stroke-width="8" stroke-opacity="0.55"/>
-        <ellipse cx="176" cy="106" rx="54" ry="11" transform="rotate(-8 176 106)" fill="#4a7fe0"/>
+        <path d="M151 95 Q178 89 205 87" fill="none" stroke="#0b0c1f" stroke-width="8" stroke-opacity="0.55"/>
+        <ellipse cx="176" cy="106" rx="54" ry="11" transform="rotate(-8 176 106)" fill="#5d6fe8"/>
       </g>
     </g>
 
-    <text x="104" y="262" fill="#7a89b3" font-family="Lexend, 'Segoe UI', Inter, system-ui, sans-serif" font-size="19" font-weight="500" letter-spacing="4">CACHYOS · HYPRLAND · QUICKSHELL</text>
+    <text x="104" y="262" fill="#8086b8" font-family="Lexend, 'Segoe UI', Inter, system-ui, sans-serif" font-size="19" font-weight="500" letter-spacing="4">CACHYOS · HYPRLAND · QUICKSHELL</text>
 
     <!-- Palette as dots -->
-    <g stroke="#dce6ff" stroke-opacity="0.18" stroke-width="1.5">
-      <circle cx="111" cy="300" r="7" fill="#0a0f1f"/>
-      <circle cx="137" cy="300" r="7" fill="#111833"/>
-      <circle cx="163" cy="300" r="7" fill="#1a2447"/>
-      <circle cx="189" cy="300" r="7" fill="#4a7fe0"/>
-      <circle cx="215" cy="300" r="7" fill="#8fb0f0"/>
-      <circle cx="241" cy="300" r="7" fill="#dce6ff"/>
-      <circle cx="267" cy="300" r="7" fill="#7a89b3"/>
-      <circle cx="293" cy="300" r="7" fill="#ff6b8a"/>
+    <g stroke="#e1e4ff" stroke-opacity="0.18" stroke-width="1.5">
+      <circle cx="111" cy="300" r="7" fill="#0b0c1f"/>
+      <circle cx="137" cy="300" r="7" fill="#13153a"/>
+      <circle cx="163" cy="300" r="7" fill="#1e2256"/>
+      <circle cx="189" cy="300" r="7" fill="#5d6fe8"/>
+      <circle cx="215" cy="300" r="7" fill="#93a4f7"/>
+      <circle cx="241" cy="300" r="7" fill="#e1e4ff"/>
+      <circle cx="267" cy="300" r="7" fill="#8086b8"/>
+      <circle cx="293" cy="300" r="7" fill="#ff6b9a"/>
     </g>
   </g>
 </svg>

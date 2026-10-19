@@ -3,7 +3,7 @@
 </p>
 
 My personal dotfiles for **CachyOS + Hyprland + Quickshell**.
-Dark navy blue, custom shell, everything built by hand.
+Dark blue-violet, TUI look, custom shell, everything built by hand.
 
 > Status: 🚧 work in progress. The setup is being built step by step.
 
@@ -16,8 +16,8 @@ Dark navy blue, custom shell, everything built by hand.
 | Shell (bar, OSD, popups, launcher, lockscreen) | Quickshell (QML) |
 | Wallpaper | linux-wallpaperengine / mpvpaper |
 | Audio interface | GoXLR via `goxlr-utility` |
-| Discord | Vesktop (Vencord) with the Roxy theme, built on system24 |
-| Spotify | Spicetify with the Roxy theme |
+| Discord | Vesktop (Vencord), TUI theme built on system24 |
+| Spotify | Spicetify, TUI theme |
 | Terminal | Ghostty |
 | Terminal shell | fish + Starship |
 | System info | fastfetch with your own image as ASCII logo |
@@ -36,27 +36,30 @@ Dark navy blue, custom shell, everything built by hand.
 - [ ] Infinite-canvas workflow
 - [ ] Vencord theme generated from the same color palette (based on system24 theme)
 - [ ] Spotify theme (Spicetify), TUI style: labeled frames (lib, home, queue, player), square covers, `[ ⏸ ]` play button
-- [ ] Ghostty, fish, Starship and fastfetch in Roxy colors
+- [ ] Ghostty, fish, Starship and fastfetch in the Periwinkle palette
 - [ ] GRUB theme (ASCII art section planned for later)
 - [ ] Hotkey overlay (holding Super highlights bound keys), later on keyboard LEDs
 - [ ] Multi-theme switcher
 
-## Theme: Roxy Dark
+## Theme: Periwinkle
 
-All colors come from a single source (`themes/roxy.json`) and are distributed by script
+A dark blue-violet palette. All colors come from a single source (`themes/roxy.json`) and are distributed by script
 to Hyprland, terminal, GTK/Qt, Quickshell, Vencord and Spotify.
 Until that script exists, the values are copied into each config by hand.
 
 | Role | Hex |
 |---|---|
-| bg | `#0a0f1f` |
-| surface | `#111833` |
-| surface2 | `#1a2447` |
-| primary | `#4a7fe0` |
-| secondary | `#8fb0f0` |
-| text | `#dce6ff` |
-| muted | `#7a89b3` |
-| danger | `#ff6b8a` |
+| bg | `#0b0c1f` |
+| surface | `#13153a` |
+| surface2 | `#1e2256` |
+| shadow | `#3f4bb8` |
+| primary | `#5d6fe8` |
+| secondary | `#93a4f7` |
+| violet | `#a48cf2` |
+| text | `#e1e4ff` |
+| muted | `#8086b8` |
+| frame | `#545b96` |
+| danger | `#ff6b9a` |
 
 Additional themes can be added later as extra JSON files.
 
@@ -82,7 +85,7 @@ roxy-dots/
 ├── spicetify/         # Spotify theme (color.ini + user.css)
 ├── themes/            # Color palettes (roxy.json, ...)
 ├── scripts/           # Theme generator and helpers
-├── vencord/           # Vesktop theme (system24 + Roxy colors)
+├── vencord/           # Vesktop theme (system24 + Periwinkle palette)
 ├── grub/roxy/         # GRUB theme, copied to /boot by `roxy grub`
 ├── assets/            # Characters, wallpapers per theme
 ├── PLAN.md
