@@ -33,9 +33,10 @@ Dark blue-violet, TUI look, custom shell, everything built by hand.
 - [ ] Custom notifications: TUI banners with actions and timer, bell with history, "silent" mode
 - [ ] Vencord plugin with a socket bridge to the shell: messages, voice joins/leaves, calls with
   accept/decline, mute/deafen notices, and actions back into Discord (join, reply, unmute)
-- [ ] Millennium plugin for Steam, same bridge: game invites with accept/decline, friends
-  now playing, coming online, chat messages
-- [ ] Steam theme for Millennium in the TUI look and Periwinkle palette
+- [ ] Later, once the setup runs on Linux and can be tested live:
+  - Millennium plugin for Steam, same bridge: game invites with accept/decline, friends
+    now playing, coming online, chat messages
+  - Steam theme for Millennium in the TUI look and Periwinkle palette
 - [ ] Launcher: fuzzy app search, calculator, run and power modes (built, untested)
 - [ ] Lockscreen: blurred desktop snapshot, weather panel, media, fade animation (built, untested)
 - [ ] Wallpaper Engine as background
