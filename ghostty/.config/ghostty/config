@@ -21,3 +21,7 @@ copy-on-select = clipboard
 confirm-close-surface = false
 
 shell-integration = fish
+
+# Ghostty puts fullscreen on ctrl+enter; that key belongs to the programs inside
+# (Claude Code sends with it). Fullscreen stays on Super+Ctrl+F from Hyprland.
+keybind = ctrl+enter=unbind
