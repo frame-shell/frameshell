@@ -1,15 +1,18 @@
 "$schema" = "https://starship.rs/config-schema.json"
 
-# Roxy Dark prompt
-# Left: directory pill and git pill. Right: one small pill per detected
-# language/tool (only shown inside matching projects), then duration and
-# clock. Input arrow on the second line.
+# Roxy Dark prompt, TUI style
+# The first line reads like the top edge of a panel:
+#   ┌[~/roxy-dots]─[ main +12 -3]──────────────[ v3.12.4]─[09:41]
+#   └─❯
+# Every segment is [content] in frame color, the gap is filled with ─.
+# Language/tool segments only show inside matching projects.
 # Symbols are Nerd Font glyphs; Ghostty ships them built in.
 
 palette = "roxy"
 add_newline = true
 
 format = """
+[┌](fg:frame)\
 $directory\
 $git_branch\
 $git_commit\
@@ -46,12 +49,12 @@ $nix_shell\
 $cmd_duration\
 $time\
 $line_break\
+[└─](fg:frame)\
 $character"""
 
 [palettes.roxy]
 bg = "#0a0f1f"
-surface = "#111833"
-surface2 = "#1a2447"
+frame = "#56658f"
 primary = "#4a7fe0"
 secondary = "#8fb0f0"
 text = "#dce6ff"
@@ -63,192 +66,195 @@ yellow = "#f2c97d"
 # ── Left side ────────────────────────────────────────────────
 
 [directory]
-style = "bold fg:secondary bg:surface2"
-format = "[](fg:surface2)[ $path ]($style)[$read_only]($read_only_style)[](fg:surface2)"
-read_only = " "
-read_only_style = "fg:danger bg:surface2"
+style = "bold fg:secondary"
+format = "[\\[](fg:frame)[$path]($style)[$read_only]($read_only_style)[\\]](fg:frame)"
+read_only = " "
+read_only_style = "fg:danger"
 truncation_length = 3
 truncation_symbol = "…/"
 
-# Git pill: branch opens it, git_status closes it (also when clean)
+# Git segment: branch opens it, git_status closes it (also when clean)
 [git_branch]
 symbol = ""
-style = "fg:primary bg:surface"
-format = " [](fg:surface)[ $symbol $branch ]($style)"
+style = "fg:primary"
+format = "[─\\[](fg:frame)[$symbol $branch]($style)"
 
 # Only shown on a detached HEAD
 [git_commit]
-style = "fg:yellow bg:surface"
-format = "[ $hash$tag ]($style)"
+style = "fg:yellow"
+format = "[  $hash$tag]($style)"
 tag_symbol = "  "
 
 # Rebase, merge, cherry-pick … with progress
 [git_state]
-style = "fg:yellow bg:surface"
-format = "[$state( $progress_current/$progress_total) ]($style)"
+style = "fg:yellow"
+format = "[ $state( $progress_current/$progress_total)]($style)"
 
 [git_metrics]
 disabled = false
-added_style = "fg:green bg:surface"
-deleted_style = "fg:danger bg:surface"
-format = "([+$added ]($added_style))([-$deleted ]($deleted_style))"
+added_style = "fg:green"
+deleted_style = "fg:danger"
+format = "([ +$added]($added_style))([ -$deleted]($deleted_style))"
 
 [git_status]
-style = "fg:muted bg:surface"
-format = "[($all_status$ahead_behind )]($style)[](fg:surface)"
+style = "fg:muted"
+format = "[( $all_status$ahead_behind)]($style)[\\]](fg:frame)"
 
+# The line between left and right
 [fill]
-symbol = " "
+symbol = "─"
+style = "fg:frame"
 
 # ── Right side: languages and tools ──────────────────────────
-# Every module uses the same small pill: surface2 caps, secondary text.
+# Same segment everywhere: [symbol version]─
 
 [python]
 symbol = ""
-style = "fg:secondary bg:surface2"
-format = " [](fg:surface2)[$symbol $version( \\($virtualenv\\))]($style)[](fg:surface2)"
+style = "fg:secondary"
+format = "[\\[](fg:frame)[$symbol $version( \\($virtualenv\\))]($style)[\\]─](fg:frame)"
 
 [conda]
 symbol = " conda"
-style = "fg:secondary bg:surface2"
-format = " [](fg:surface2)[$symbol $environment]($style)[](fg:surface2)"
+style = "fg:secondary"
+format = "[\\[](fg:frame)[$symbol $environment]($style)[\\]─](fg:frame)"
 ignore_base = true
 
 [nodejs]
 symbol = ""
-style = "fg:secondary bg:surface2"
-format = " [](fg:surface2)[$symbol $version]($style)[](fg:surface2)"
+style = "fg:secondary"
+format = "[\\[](fg:frame)[$symbol $version]($style)[\\]─](fg:frame)"
 
 [bun]
 symbol = "bun"
-style = "fg:secondary bg:surface2"
-format = " [](fg:surface2)[$symbol $version]($style)[](fg:surface2)"
+style = "fg:secondary"
+format = "[\\[](fg:frame)[$symbol $version]($style)[\\]─](fg:frame)"
 
 [deno]
 symbol = "deno"
-style = "fg:secondary bg:surface2"
-format = " [](fg:surface2)[$symbol $version]($style)[](fg:surface2)"
+style = "fg:secondary"
+format = "[\\[](fg:frame)[$symbol $version]($style)[\\]─](fg:frame)"
 
 [java]
 symbol = ""
-style = "fg:secondary bg:surface2"
-format = " [](fg:surface2)[$symbol $version]($style)[](fg:surface2)"
+style = "fg:secondary"
+format = "[\\[](fg:frame)[$symbol $version]($style)[\\]─](fg:frame)"
 
 [kotlin]
 symbol = ""
-style = "fg:secondary bg:surface2"
-format = " [](fg:surface2)[$symbol $version]($style)[](fg:surface2)"
+style = "fg:secondary"
+format = "[\\[](fg:frame)[$symbol $version]($style)[\\]─](fg:frame)"
 
 [scala]
 symbol = ""
-style = "fg:secondary bg:surface2"
-format = " [](fg:surface2)[$symbol $version]($style)[](fg:surface2)"
+style = "fg:secondary"
+format = "[\\[](fg:frame)[$symbol $version]($style)[\\]─](fg:frame)"
 
 [gradle]
 symbol = "gradle"
-style = "fg:secondary bg:surface2"
-format = " [](fg:surface2)[$symbol $version]($style)[](fg:surface2)"
+style = "fg:secondary"
+format = "[\\[](fg:frame)[$symbol $version]($style)[\\]─](fg:frame)"
 
 [c]
 symbol = ""
-style = "fg:secondary bg:surface2"
-format = " [](fg:surface2)[$symbol $version]($style)[](fg:surface2)"
+style = "fg:secondary"
+format = "[\\[](fg:frame)[$symbol $version]($style)[\\]─](fg:frame)"
 
 # Off by default in Starship
 [cpp]
 disabled = false
 symbol = ""
-style = "fg:secondary bg:surface2"
-format = " [](fg:surface2)[$symbol $version]($style)[](fg:surface2)"
+style = "fg:secondary"
+format = "[\\[](fg:frame)[$symbol $version]($style)[\\]─](fg:frame)"
 
 [cmake]
 symbol = "cmake"
-style = "fg:secondary bg:surface2"
-format = " [](fg:surface2)[$symbol $version]($style)[](fg:surface2)"
+style = "fg:secondary"
+format = "[\\[](fg:frame)[$symbol $version]($style)[\\]─](fg:frame)"
 
 [rust]
 symbol = ""
-style = "fg:secondary bg:surface2"
-format = " [](fg:surface2)[$symbol $version]($style)[](fg:surface2)"
+style = "fg:secondary"
+format = "[\\[](fg:frame)[$symbol $version]($style)[\\]─](fg:frame)"
 
 [golang]
 symbol = ""
-style = "fg:secondary bg:surface2"
-format = " [](fg:surface2)[$symbol $version]($style)[](fg:surface2)"
+style = "fg:secondary"
+format = "[\\[](fg:frame)[$symbol $version]($style)[\\]─](fg:frame)"
 
 [zig]
 symbol = ""
-style = "fg:secondary bg:surface2"
-format = " [](fg:surface2)[$symbol $version]($style)[](fg:surface2)"
+style = "fg:secondary"
+format = "[\\[](fg:frame)[$symbol $version]($style)[\\]─](fg:frame)"
 
 [dotnet]
 symbol = ""
-style = "fg:secondary bg:surface2"
-format = " [](fg:surface2)[$symbol $version(  $tfm)]($style)[](fg:surface2)"
+style = "fg:secondary"
+format = "[\\[](fg:frame)[$symbol $version(  $tfm)]($style)[\\]─](fg:frame)"
 
 [php]
 symbol = ""
-style = "fg:secondary bg:surface2"
-format = " [](fg:surface2)[$symbol $version]($style)[](fg:surface2)"
+style = "fg:secondary"
+format = "[\\[](fg:frame)[$symbol $version]($style)[\\]─](fg:frame)"
 
 [ruby]
 symbol = ""
-style = "fg:secondary bg:surface2"
-format = " [](fg:surface2)[$symbol $version]($style)[](fg:surface2)"
+style = "fg:secondary"
+format = "[\\[](fg:frame)[$symbol $version]($style)[\\]─](fg:frame)"
 
 [lua]
 symbol = ""
-style = "fg:secondary bg:surface2"
-format = " [](fg:surface2)[$symbol $version]($style)[](fg:surface2)"
+style = "fg:secondary"
+format = "[\\[](fg:frame)[$symbol $version]($style)[\\]─](fg:frame)"
 
 [swift]
 symbol = ""
-style = "fg:secondary bg:surface2"
-format = " [](fg:surface2)[$symbol $version]($style)[](fg:surface2)"
+style = "fg:secondary"
+format = "[\\[](fg:frame)[$symbol $version]($style)[\\]─](fg:frame)"
 
 [dart]
 symbol = ""
-style = "fg:secondary bg:surface2"
-format = " [](fg:surface2)[$symbol $version]($style)[](fg:surface2)"
+style = "fg:secondary"
+format = "[\\[](fg:frame)[$symbol $version]($style)[\\]─](fg:frame)"
 
 [haskell]
 symbol = ""
-style = "fg:secondary bg:surface2"
-format = " [](fg:surface2)[$symbol $version]($style)[](fg:surface2)"
+style = "fg:secondary"
+format = "[\\[](fg:frame)[$symbol $version]($style)[\\]─](fg:frame)"
 
 [elixir]
 symbol = ""
-style = "fg:secondary bg:surface2"
-format = " [](fg:surface2)[$symbol $version]($style)[](fg:surface2)"
+style = "fg:secondary"
+format = "[\\[](fg:frame)[$symbol $version]($style)[\\]─](fg:frame)"
 
 # Version from package.json, Cargo.toml, pyproject.toml …
 [package]
 symbol = ""
-style = "fg:muted bg:surface2"
-format = " [](fg:surface2)[$symbol $version]($style)[](fg:surface2)"
+style = "fg:muted"
+format = "[\\[](fg:frame)[$symbol $version]($style)[\\]─](fg:frame)"
 
 [docker_context]
 symbol = ""
-style = "fg:secondary bg:surface2"
-format = " [](fg:surface2)[$symbol $context]($style)[](fg:surface2)"
+style = "fg:secondary"
+format = "[\\[](fg:frame)[$symbol $context]($style)[\\]─](fg:frame)"
 
 [nix_shell]
 symbol = ""
-style = "fg:secondary bg:surface2"
-format = " [](fg:surface2)[$symbol $state( $name)]($style)[](fg:surface2)"
+style = "fg:secondary"
+format = "[\\[](fg:frame)[$symbol $state( $name)]($style)[\\]─](fg:frame)"
 
 # ── Duration, clock, input ───────────────────────────────────
 
 [cmd_duration]
 min_time = 2000
 style = "fg:muted"
-format = "  [ $duration]($style)"
+format = "[\\[](fg:frame)[ $duration]($style)[\\]─](fg:frame)"
 
+# Last segment, so no trailing ─
 [time]
 disabled = false
 time_format = "%H:%M"
 style = "fg:muted"
-format = "  [$time]($style)"
+format = "[\\[](fg:frame)[$time]($style)[\\]](fg:frame)"
 
 [character]
 success_symbol = "[❯](bold primary)"

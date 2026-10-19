@@ -35,7 +35,7 @@ Dark navy blue, custom shell, everything built by hand.
 - [ ] Wallpaper Engine as background
 - [ ] Infinite-canvas workflow
 - [ ] Vencord theme generated from the same color palette (based on system24 theme)
-- [ ] Spotify theme (Spicetify): borderless cover tiles, icon rail, queue as a table, floating player bar
+- [ ] Spotify theme (Spicetify), TUI style: labeled frames (lib, home, queue, player), square covers, `[ ⏸ ]` play button
 - [ ] Ghostty, fish, Starship and fastfetch in Roxy colors
 - [ ] GRUB theme (ASCII art section planned for later)
 - [ ] Hotkey overlay (holding Super highlights bound keys), later on keyboard LEDs
@@ -77,7 +77,7 @@ roxy-dots/
 ├── roxy               # CLI: install, remove, update, status
 ├── ghostty/           # Terminal config + Roxy color theme
 ├── fish/              # conf.d/roxy.fish: syntax colors, Starship, fastfetch greeting
-├── starship/          # Prompt with git and language pills
+├── starship/          # TUI frame prompt with git and language segments
 ├── fastfetch/         # System info, logo from assets/roxy.png
 ├── spicetify/         # Spotify theme (color.ini + user.css)
 ├── themes/            # Color palettes (roxy.json, ...)
@@ -133,7 +133,7 @@ Manual steps:
 - **Spotify:** install and open Spotify once before `roxy install spicetify`.
 - **Vesktop:** start it once, then close it before `roxy install vencord` so the theme can be
   switched on automatically (otherwise: Settings → Themes → Roxy).
-- **Fonts:** JetBrains Mono (built into Ghostty) and Lexend for the Spotify theme.
+- **Font:** JetBrains Mono everywhere (TUI look); `roxy` installs `ttf-jetbrains-mono`.
 
 Not covered by `roxy` yet: `quickshell`, `hyprland`, `goxlr-utility`.
 

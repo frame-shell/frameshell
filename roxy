@@ -27,7 +27,7 @@ declare -A DEPS=(
   [fish]="fish"
   [starship]="starship"
   [fastfetch]="fastfetch chafa"
-  [spicetify]="spicetify-cli"
+  [spicetify]="spicetify-cli ttf-jetbrains-mono"
   [vencord]="vesktop ttf-jetbrains-mono jq"
 )
 
@@ -593,8 +593,8 @@ cmd_status() {
   command -v stow >/dev/null && ok "stow installed" || warn "stow missing (roxy install takes care of it)"
 
   if command -v fc-list >/dev/null; then
-    fc-list | grep -qi "lexend" && ok "Font Lexend installed" \
-      || warn "Font Lexend missing, the Spotify theme falls back to Inter/system font"
+    fc-list | grep -qiE "jetbrains ?mono" && ok "Font JetBrains Mono installed" \
+      || warn "Font JetBrains Mono missing, Spotify, Vesktop and GRUB need it (pacman -S ttf-jetbrains-mono)"
   fi
 
   [[ -f $REPO/assets/roxy.png ]] && ok "fastfetch logo found" \
