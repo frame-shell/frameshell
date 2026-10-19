@@ -26,12 +26,12 @@ Dark blue-violet, TUI look, custom shell, everything built by hand.
 
 ## Planned features
 
-- [ ] Custom top bar (workspaces, clock, volume, tray)
+- [ ] Custom top bar (workspaces, clock, volume, tray) with a control center for PC stats
 - [ ] Spotify popup on song change (MPRIS), fading in at the top left, with playback controls
 - [ ] OSD module for GoXLR faders, mic mute, system volume and brightness
 - [ ] Custom notifications
 - [ ] Custom launcher
-- [ ] Lockscreen
+- [ ] Lockscreen: blurred desktop snapshot, weather panel, media, fade animation (built, untested)
 - [ ] Wallpaper Engine as background
 - [ ] Infinite-canvas workflow
 - [ ] Vencord theme generated from the same color palette (based on system24 theme)
@@ -67,18 +67,20 @@ Additional themes can be added later as extra JSON files.
 
 ```
 roxy-dots/
-├── hypr/              # Hyprland config
-├── quickshell/
+├── hypr/              # roxy/lock.conf (keybind, autostart) + hypridle.conf
+├── quickshell/.config/quickshell/
 │   ├── shell.qml      # Entry point
-│   ├── Theme.qml      # Singleton: colors and animation timings
-│   ├── bar/           # Top bar
-│   ├── osd/           # Overlays (GoXLR, mute, volume)
-│   ├── media/         # Spotify popup (MPRIS)
-│   ├── notifications/ # Notification daemon
-│   ├── launcher/      # App launcher
-│   └── lockscreen/
+│   ├── config/        # Theme.qml (palette, fonts, timings), Config.qml (your settings)
+│   ├── components/    # Frame.qml: the labeled TUI frame
+│   ├── services/      # Weather.qml (wttr.in)
+│   ├── lockscreen/    # Lock, LockContext (PAM), LockSurface (UI), pam/
+│   ├── bar/           # Top bar with control center (planned)
+│   ├── launcher/      # App launcher (planned)
+│   ├── osd/           # Overlays: GoXLR, mute, volume (planned)
+│   ├── media/         # Spotify popup, MPRIS (planned)
+│   └── notifications/ # Notification daemon (planned)
 ├── roxy               # CLI: install, remove, update, status
-├── ghostty/           # Terminal config + Roxy color theme
+├── ghostty/           # Terminal config + color theme
 ├── fish/              # conf.d/roxy.fish: syntax colors, Starship, fastfetch greeting
 ├── starship/          # TUI frame prompt with git and language segments
 ├── fastfetch/         # System info, logo from assets/roxy.png
@@ -127,7 +129,7 @@ Backups live in `~/.local/state/roxy-dots/backup/` (one folder per snapshot, nam
 and reason). `install` moves conflicting configs there, `update` and `restore` take a
 snapshot before they change anything. `update` also updates the `roxy` CLI itself.
 
-Packages: `ghostty`, `fish`, `starship`, `fastfetch`, `spicetify`, `vencord`.
+Packages: `ghostty`, `fish`, `starship`, `fastfetch`, `spicetify`, `vencord`, `quickshell`, `hypr`.
 Each package folder mirrors the home directory (`ghostty/.config/ghostty/...`).
 
 Manual steps:
@@ -136,9 +138,35 @@ Manual steps:
 - **Spotify:** install and open Spotify once before `roxy install spicetify`.
 - **Vesktop:** start it once, then close it before `roxy install vencord` so the theme can be
   switched on automatically (otherwise: Settings → Themes → Roxy).
-- **Font:** JetBrains Mono everywhere (TUI look); `roxy` installs `ttf-jetbrains-mono`.
+- **Font:** JetBrains Mono everywhere (TUI look); `roxy` installs `ttf-jetbrains-mono`
+  and the Nerd Font build for icons.
+- **Hyprland:** `roxy install hypr` adds `source = ~/.config/hypr/roxy/lock.conf` to your
+  own `hyprland.conf` (backed up first). Remove an older SUPER+L bind or a second
+  `exec-once = hypridle` if your config has one.
+- **Weather:** set your city in `quickshell/.config/quickshell/config/Config.qml`
+  (`weatherLocation`); empty means wttr.in guesses it from your IP.
 
-Not covered by `roxy` yet: `quickshell`, `hyprland`, `goxlr-utility`.
+Not covered by `roxy` yet: Hyprland itself, `goxlr-utility`.
+
+## Lockscreen
+
+Super+L (or `qs ipc call lock lock`, or hypridle after 10 minutes) takes a snapshot of
+every screen, locks the session and blurs that snapshot behind the clock, password field,
+weather panel, media controls and keyboard status. Unlocking plays the animation backwards.
+The password is checked by PAM with `lockscreen/pam/password.conf` (password only).
+
+If Quickshell crashes while locked, Hyprland keeps the screen locked on purpose. To get
+back in: switch to a TTY (Ctrl+Alt+F3), log in, then run
+
+```bash
+hyprctl --instance 0 dispatch exec qs
+```
+
+```bash
+hyprctl --instance 0 dispatch exec "qs ipc call lock lock"
+```
+
+and switch back (Ctrl+Alt+F1 or F2). The new lockscreen takes over and unlocks normally.
 
 ## Note on assets
 
