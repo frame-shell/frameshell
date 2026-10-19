@@ -3,6 +3,7 @@
 // Zed's settings UI end up in the repo.
 {
   // Switches off the agent panel, inline assistant and edit predictions
+  "cli_default_open_behavior": "existing_window",
   "disable_ai": true,
   "agent": { "enabled": false, "button": false },
 

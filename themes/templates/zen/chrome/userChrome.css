@@ -66,3 +66,46 @@ menupopup {
   box-shadow: none !important;
   outline: 1.5px solid {{colors.surface2}} !important;
 }
+
+/* Zen 1.2x paints the window from these, and its own values (plus a workspace gradient
+   set from JavaScript) win over the variables above, so the surfaces get the colors
+   directly. userChrome.css is an ordinary author sheet loaded first, hence :root:root. */
+:root:root {
+  --zen-main-browser-background: {{colors.bg}} !important;
+  --zen-main-browser-background-toolbar: {{colors.bg}} !important;
+  --zen-themed-toolbar-bg: {{colors.bg}} !important;
+  --zen-themed-toolbar-bg-transparent: {{colors.bg}} !important;
+  --toolbox-bgcolor: {{colors.bg}} !important;
+  --toolbar-bgcolor: {{colors.bg}} !important;
+  --lwt-accent-color: {{colors.bg}} !important;
+  --toolbox-textcolor: {{colors.text}} !important;
+  --toolbar-color: {{colors.text}} !important;
+  --lwt-text-color: {{colors.text}} !important;
+  --arrowpanel-background: {{colors.surface}} !important;
+  --arrowpanel-color: {{colors.text}} !important;
+  --arrowpanel-border-color: {{colors.surface2}} !important;
+}
+
+/* Window, sidebar and toolbars in the theme's background, no gradient over it */
+#zen-main-app-wrapper,
+#navigator-toolbox,
+#titlebar,
+#nav-bar,
+#TabsToolbar,
+#zen-sidebar-top-buttons,
+#zen-tabs-wrapper,
+#zen-sidebar-bottom-buttons,
+#tabbrowser-tabbox,
+#tabbrowser-tabpanels,
+#browser {
+  background: {{colors.bg}} !important;
+  background-image: none !important;
+}
+
+/* Side panels and the find bar on the surface color */
+#sidebar-box,
+#sidebar,
+.findbar-container,
+findbar {
+  background: {{colors.surface}} !important;
+}
