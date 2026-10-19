@@ -226,9 +226,9 @@ with "open", "folder" and "delete". grim takes the picture, wl-copy fills the cl
 Super+L (or `qs ipc call lock lock`, or hypridle after 10 minutes) takes a snapshot of
 every screen, locks the session and blurs that snapshot behind the clock, password field,
 weather panel, media controls and keyboard status. The login only shows on the screen
-you were on; the others show the blur. A bright or busy picture is dimmed more than a
-dark, calm one (the snapshot is measured once; `dimBase` and `dimMax` in
-`LockSurface.qml`), so the text stays readable. Unlocking plays the animation backwards. The
+you were on; the others show the blur. Only a picture so bright that the blur would still
+leave it light behind the text is dimmed further, and only by as much as it takes
+(`readable`, `dimBase` and `dimMax` in `LockSurface.qml`). Unlocking plays the animation backwards. The
 password is checked by PAM with `lockscreen/pam/password.conf` (password only).
 
 With `frame login` ([frame.md](frame.md)) the login screen looks the same: a greeter built
