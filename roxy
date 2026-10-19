@@ -29,7 +29,7 @@ declare -A DEPS=(
   [fastfetch]="fastfetch chafa"
   [spicetify]="spicetify-cli ttf-jetbrains-mono"
   [vencord]="vesktop ttf-jetbrains-mono jq"
-  [quickshell]="quickshell ttf-jetbrains-mono ttf-jetbrains-mono-nerd wl-clipboard"
+  [quickshell]="quickshell ttf-jetbrains-mono ttf-jetbrains-mono-nerd wl-clipboard libpulse pciutils"
   [hypr]="hypridle"
 )
 

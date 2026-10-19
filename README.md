@@ -26,7 +26,7 @@ Dark blue-violet, TUI look, custom shell, everything built by hand.
 
 ## Planned features
 
-- [ ] Custom top bar (workspaces, clock, volume, tray) with a control center for PC stats
+- [ ] Top bar with control center (PC stats, toggles, GoXLR faders) and app mixer for per-app routing (built, untested)
 - [ ] Spotify popup on song change (MPRIS), fading in at the top left, with playback controls
 - [ ] OSD module for GoXLR faders, mic mute, system volume and brightness
 - [ ] Custom notifications
@@ -71,10 +71,11 @@ roxy-dots/
 ├── quickshell/.config/quickshell/
 │   ├── shell.qml      # Entry point
 │   ├── config/        # Theme.qml (palette, fonts, timings), Config.qml (your settings)
-│   ├── components/    # Frame.qml: the labeled TUI frame
-│   ├── services/      # Weather.qml (wttr.in), Apps.qml (desktop entries, search, usage)
+│   ├── components/    # Frame, Meter, TuiSlider, TuiButton, AppIcon
+│   ├── services/      # Weather, Apps, SystemStats, Audio (PipeWire), GoXLR, Toggles
 │   ├── lockscreen/    # Lock, LockContext (PAM), LockSurface (UI), pam/
-│   ├── bar/           # Top bar with control center (planned)
+│   ├── bar/           # Top bar: workspaces, title, clock, media, stats, volume
+│   ├── controlcenter/ # Control center (session, toggles, faders, stats) and app mixer
 │   ├── launcher/      # Launcher (window, IPC), LauncherView (apps, calc, run, power)
 │   ├── osd/           # Overlays: GoXLR, mute, volume (planned)
 │   ├── media/         # Spotify popup, MPRIS (planned)
@@ -141,8 +142,8 @@ Manual steps:
 - **Font:** JetBrains Mono everywhere (TUI look); `roxy` installs `ttf-jetbrains-mono`
   and the Nerd Font build for icons.
 - **Hyprland:** `roxy install hypr` adds `source = ~/.config/hypr/roxy/shell.conf` to your
-  own `hyprland.conf` (backed up first). Remove older SUPER+L or SUPER+SPACE binds or a
-  second `exec-once = hypridle` if your config has them.
+  own `hyprland.conf` (backed up first). Remove older SUPER+L, SUPER+SPACE or SUPER+C
+  binds or a second `exec-once = hypridle` if your config has them.
 - **Weather:** set your city in `quickshell/.config/quickshell/config/Config.qml`
   (`weatherLocation`); empty means wttr.in guesses it from your IP.
 
@@ -161,6 +162,31 @@ Super+Space (or `qs ipc call launcher toggle`) opens the launcher on the focused
 
 ↑↓ selects, Tab cycles the modes, Esc or a click outside closes. Launch counts are kept
 in `launcher-usage.json` in Quickshell's state folder.
+
+## Bar and control center
+
+The bar runs on every screen: workspaces and window title on the left, clock in the
+middle, media, CPU load and temperature, RAM, volume and keyboard layout on the right.
+It flies up while the lockscreen takes over and drops back in after unlocking.
+
+Super+C (or the slider button in the bar) opens the control center:
+
+- **session:** user, uptime, lock, sleep, reboot, off (reboot and off need a second click)
+- **toggles:** wi-fi (`nmcli`), bluetooth, silent (for the notification module, planned),
+  stay awake (blocks idle lock and screen-off), game mode (animations and blur off,
+  `powerprofilesctl set performance`), mic mute (the GoXLR mic fader mute)
+- **goxlr faders:** levels follow the physical faders, the mute buttons work from here
+- **system:** CPU with a one-minute curve, GPU, VRAM (amdgpu), RAM, disk, network
+
+**app mixer ›** opens the mixer beside it: every app that plays or records audio, with
+its own volume, mute and the GoXLR channel it is routed to (system, game, chat, music;
+inputs: chat mic, sampler). Routing uses `pactl move-sink-input`, WirePlumber remembers it
+per app. From six apps on the rows get compact, idle apps are dimmed at the bottom.
+
+GoXLR notes: levels and mutes come from the goxlr-utility HTTP API
+(`http://localhost:14564`). The mixer finds the GoXLR devices by their PipeWire
+description; if yours are named differently (`wpctl status`), change `goxlrOutputs` and
+`goxlrInputs` in `config/Config.qml`.
 
 ## Lockscreen
 
