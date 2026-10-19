@@ -7,7 +7,9 @@
  * Events: DMs and mentions, people joining/leaving your voice channel (and channels you
  * watch, see "Watch in shell" in a voice channel's right-click menu), scheduled server
  * events going live, incoming calls and how they ended (answered, declined, missed), your own mute/deafen changes.
- * Actions: accept/decline call, call back, join a watched channel, open channel, toggle mute/deafen.
+ * Actions: accept/decline call, call back, join a watched channel, open channel, toggle mute/deafen,
+ * and for the launcher (d): list contacts, open a DM, call someone, send a DM, reply to the
+ * last person you wrote to.
  *
  * Not tested yet (waits for the move to Linux). Discord's internal module and event
  * names change now and then; if something stops working, check them first.
@@ -15,9 +17,10 @@
 
 import { NavContextMenuPatchCallback } from "@api/ContextMenu";
 import { definePluginSettings } from "@api/Settings";
+import { openPrivateChannel, sendMessage } from "@utils/discord";
 import definePlugin, { OptionType, PluginNative } from "@utils/types";
 import { findByPropsLazy, findStoreLazy } from "@webpack";
-import { ChannelStore, GuildStore, Menu, NavigationRouter, React, SelectedChannelStore, UserStore } from "@webpack/common";
+import { ChannelStore, GuildStore, Menu, NavigationRouter, React, RelationshipStore, RestAPI, SelectedChannelStore, UserStore } from "@webpack/common";
 
 const Native = VencordNative.pluginHelpers.ShellBridge as PluginNative<typeof import("./native")>;
 
@@ -124,8 +127,93 @@ function endCall(channelId: string) {
     }, 400);
 }
 
+// ── Launcher (d): contacts and direct messages ───────────────
+
+// The DM you last wrote in, for "d reply"; unknown until you write one after Discord started
+let lastDm: { userId: string; name: string; channelId: string } | null = null;
+
+function contactOf(userId: string, channelId: string | null) {
+    const user = UserStore.getUser(userId);
+    return { userId, name: displayName(user), username: user?.username ?? "", avatar: avatarOf(user), channelId };
+}
+
+function newestFirst(a: any, b: any) {
+    const x = BigInt(a.lastMessageId ?? 0), y = BigInt(b.lastMessageId ?? 0);
+    return x > y ? -1 : x < y ? 1 : 0;
+}
+
+// Open DMs, most recent first, then friends without a DM yet
+function contacts() {
+    const channels = Object.values<any>(ChannelStore.getMutablePrivateChannels?.() ?? {})
+        .filter(c => c.type === 1 && c.recipients?.length)
+        .sort(newestFirst);
+    const out = channels.map(c => contactOf(c.recipients[0], c.id));
+    const seen = new Set(out.map(c => c.userId));
+    for (const id of RelationshipStore.getFriendIDs?.() ?? [])
+        if (!seen.has(id))
+            out.push(contactOf(id, null));
+    return out.slice(0, 300);
+}
+
+// Without a known last DM, "reply" goes to the most recent DM and says so
+function replyTarget() {
+    if (lastDm)
+        return { ...lastDm, guessed: false };
+    const first = contacts().find(c => c.channelId);
+    return first ? { userId: first.userId, name: first.name, channelId: first.channelId as string, guessed: true } : null;
+}
+
+async function dmChannel(userId: string): Promise<string> {
+    const existing = ChannelStore.getDMFromUserId?.(userId);
+    if (existing)
+        return existing;
+    const { body } = await RestAPI.post({ url: "/users/@me/channels", body: { recipients: [userId] } });
+    return body.id;
+}
+
+async function sendDm(userId: string, content: string) {
+    const to = displayName(UserStore.getUser(userId));
+    try {
+        const channelId = await dmChannel(userId);
+        await sendMessage(channelId, { content });
+        Native.send({ type: "sent", ok: true, to });
+    } catch (e) {
+        Native.send({ type: "sent", ok: false, to, error: String(e) });
+    }
+}
+
+async function callUser(userId: string) {
+    try {
+        const channelId = await dmChannel(userId);
+        ChannelActions.selectVoiceChannel(channelId);
+        CallActions.ring(channelId);
+    } catch (e) {
+        console.warn("[ShellBridge] call failed", e);
+    }
+}
+
 function run(command: any) {
     switch (command?.cmd) {
+        case "list_contacts":
+            Native.send({ type: "contacts", list: contacts(), lastDm: replyTarget() });
+            break;
+        case "open_dm":
+            openPrivateChannel(command.userId);
+            break;
+        case "call_user":
+            callUser(command.userId);
+            break;
+        case "send_dm":
+            sendDm(command.userId, String(command.content ?? ""));
+            break;
+        case "reply_last": {
+            const target = replyTarget();
+            if (target)
+                sendDm(target.userId, String(command.content ?? ""));
+            else
+                Native.send({ type: "sent", ok: false, to: "", error: "no DM to reply to yet" });
+            break;
+        }
         case "accept_call":
             ChannelActions.selectVoiceChannel(command.channelId);
             break;
@@ -173,9 +261,17 @@ export default definePlugin({
             if (optimistic)
                 return;
             const me = UserStore.getCurrentUser();
-            if (!me || message.author?.id === me.id)
+            if (!me)
                 return;
             const channel = ChannelStore.getChannel(message.channel_id);
+            // Your own DM: remember who it went to, for "d reply" in the launcher
+            if (message.author?.id === me.id) {
+                if (channel?.type === 1 && channel.recipients?.length) {
+                    lastDm = { userId: channel.recipients[0], name: displayName(UserStore.getUser(channel.recipients[0])), channelId: channel.id };
+                    Native.send({ type: "last_dm", ...lastDm, guessed: false });
+                }
+                return;
+            }
             const isDm = channel?.isPrivate?.() ?? false;
             const mentioned = message.mention_everyone || (message.mentions ?? []).some((u: any) => u.id === me.id);
             if (!isDm && !mentioned)

@@ -24,6 +24,7 @@ frame theme list             # themes; frame theme set <name> switches
 frame grub                   # theme the GRUB boot menu (sudo)
 frame grub remove            # switch it off again
 frame wallpaper backend mpv  # wallpaper backend: both, mpv or image
+frame spotify login          # Spotify Web API for the launcher, see spotify.md
 ```
 
 `frame grub` only works when the system boots with GRUB (`/boot/grub/grub.cfg` exists;
@@ -84,7 +85,7 @@ frameshell/
 │   ├── lockscreen/    # Lock, LockContext (PAM), LockSurface (UI), pam/
 │   ├── bar/           # Top bar: workspaces, title, clock, media, stats, volume
 │   ├── controlcenter/ # Control center (session, toggles, faders, stats) and app mixer
-│   ├── launcher/      # Launcher (window, IPC), LauncherView (apps, calc, run, power)
+│   ├── launcher/      # Launcher (window, IPC), LauncherView (UI), Modes (prefixes, results, Enter)
 │   ├── osd/           # Fader, mute, volume and layout notices
 │   ├── wallpapers/    # Wallpaper app (Super+W)
 │   ├── media/         # Spotify popup on song change (MPRIS)
@@ -93,7 +94,7 @@ frameshell/
 ├── fish/              # conf.d/frameshell.fish: Starship, fastfetch greeting (+ generated colors)
 ├── starship/          # generated TUI frame prompt with git and language segments
 ├── fastfetch/         # System info, logo from assets/logo.png
-├── spicetify/         # Spotify theme (user.css + generated color.ini)
+├── spicetify/         # Spotify theme, launcher extension (Extensions/frameshell.js), frame-spotify (Web API)
 ├── vencord/           # generated Vesktop theme (system24) and plugins/shellBridge
 ├── wallpaper/         # frame-wallpaper: backends for the wallpaper app
 ├── zed/               # settings.json (+ generated theme)

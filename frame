@@ -10,6 +10,7 @@
 #                                write every app color file from themes/<name>.json
 #   frame grub [install|remove]  theme the GRUB boot menu (copies to /boot, needs sudo)
 #   frame wallpaper <args…>      passed to frame-wallpaper (backend, set, apply, …)
+#   frame spotify <args…>        passed to frame-spotify (login, logout, status)
 #   frame status                 show what is linked and what is missing
 #
 # Options: -n/--dry-run (print what would happen), -y/--yes (no questions)
@@ -33,9 +34,12 @@ declare -A DEPS=(
   [fish]="fish"
   [starship]="starship"
   [fastfetch]="fastfetch chafa"
-  [spicetify]="spicetify-cli ttf-jetbrains-mono"
+  # curl, jq, openssl: frame-spotify, the Web API helper for the launcher
+  [spicetify]="spicetify-cli ttf-jetbrains-mono curl jq openssl"
   [vencord]="vesktop ttf-jetbrains-mono jq git nodejs pnpm"
-  [quickshell]="quickshell ttf-jetbrains-mono ttf-jetbrains-mono-nerd wl-clipboard libpulse pciutils"
+  # Launcher modes: qt6-websockets (spotify), fd (files), cliphist (clipboard), wtype +
+  # unicode-emoji + noto-fonts-emoji (emoji), sound-theme-freedesktop (timer and alarm sound)
+  [quickshell]="quickshell ttf-jetbrains-mono ttf-jetbrains-mono-nerd wl-clipboard libpulse pciutils qt6-websockets fd cliphist wtype unicode-emoji noto-fonts-emoji sound-theme-freedesktop"
   [hypr]="hypridle"
   # ffmpeg makes the video thumbnails in the wallpaper app; linux-wallpaperengine
   # comes on top when the "both" backend is picked
@@ -182,6 +186,8 @@ usage() {
     grub [install|remove] theme the GRUB boot menu (copies to /boot, needs sudo)
     wallpaper <…>         wallpaper backends, e.g. "frame wallpaper backend mpv"
                           (both|mpv|image; all commands: frame wallpaper help)
+    spotify login         connect the Spotify Web API for the launcher (docs/spotify.md)
+    spotify status        logged in or not; "spotify logout" forgets the tokens
     status                show what is linked and what is missing
 
   ${c_bold}Options${c_reset}
@@ -414,6 +420,25 @@ post_fastfetch() {
   fi
 }
 
+# The launcher's Spotify bridge (s mode): the frameshell extension plus a token only the
+# shell and the client know (frameshell-token.js), so no web page can pose as Spotify.
+# Without it the launcher falls back to frame-spotify and MPRIS.
+spotify_bridge() {
+  local token_file="$STATE_DIR/spotify-bridge.token"
+  local token_js="$HOME/.config/spicetify/Extensions/frameshell-token.js"
+  if ((DRY_RUN)); then
+    info "would write the bridge token to $token_file and $token_js"
+  else
+    mkdir -p "$STATE_DIR" "$(dirname "$token_js")"
+    if [[ ! -s $token_file ]]; then
+      (umask 077 && od -An -tx1 -N24 /dev/urandom | tr -d ' \n' >"$token_file")
+    fi
+    printf 'window.FRAMESHELL_TOKEN = "%s";\n' "$(cat "$token_file")" >"$token_js"
+  fi
+  run spicetify config extensions frameshell-token.js
+  run spicetify config extensions frameshell.js
+}
+
 # Spotify updates wipe spicetify's changes, so this runs on every update
 post_spicetify() {
   if ! command -v spicetify >/dev/null && ((!DRY_RUN)); then
@@ -421,6 +446,7 @@ post_spicetify() {
     return 0
   fi
   run spicetify config current_theme Frameshell color_scheme Frameshell
+  spotify_bridge
 
   # apply fails on a fresh install or after a Spotify update; a new backup fixes both
   # The quiet first try avoids spicetify's "you haven't backed up" error on a fresh install
@@ -1226,6 +1252,13 @@ cmd_wallpaper() {
   exec "$bin" "$@"
 }
 
+# Hands everything to the Spotify Web API helper: frame spotify login, … status, … logout
+cmd_spotify() {
+  local bin="$HOME/.local/bin/frame-spotify"
+  [[ -x $bin ]] || bin="$REPO/spicetify/.local/bin/frame-spotify"
+  exec "$bin" "$@"
+}
+
 cmd_install() {
   need_arch
   local pkgs=("$@") p
@@ -1484,6 +1517,7 @@ main() {
     grub) cmd_grub "${args[@]}" ;;
     theme) cmd_theme "${args[@]}" ;;
     wallpaper | wp) cmd_wallpaper "${args[@]}" ;;
+    spotify) cmd_spotify "${args[@]}" ;;
     status | st | doctor) cmd_status ;;
     help) usage ;;
     *) die "Unknown command: $cmd (try: frame help)" ;;

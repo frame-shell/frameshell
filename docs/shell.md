@@ -26,9 +26,39 @@ Super+Space (or `qs ipc call launcher toggle`) opens the launcher on the focused
 | `= 2*21` | calculator, Enter copies the result (`wl-copy`) |
 | `> btop` | runs the command in Ghostty, the window stays open |
 | `: reboot` | lock, logout, suspend, reboot, shutdown; all but lock need Enter twice |
+| `s daft punk`, `s next`, `s f 30` | Spotify: search and controls, see [spotify.md](spotify.md) |
+| `d anna` | Discord: open the DM; Shift+Enter calls |
+| `d call anna`, `d msg anna hi` | call someone, send a DM without opening Discord |
+| `d reply on my way` | DM to the person you last wrote to |
+| `t 5m tea`, `t 1:30`, `t 25` | timer (a bare number is minutes); `t` lists running ones, Enter stops one |
+| `a laundry 10:00 m-f` | alarm, see below; `a` lists them |
+| `# heart` | emoji, Enter copies, Shift+Enter types it into the window behind |
+| `/ notes`, `/ dev notes` | files and folders in your home (fd), words before the last narrow the path; Enter opens, Shift+Enter opens a terminal there |
+| `ssh nas` | hosts from `~/.ssh/config`, or any `user@host`; opens in Ghostty |
+| `; token` | clipboard history (cliphist), Enter copies, Shift+Enter deletes the entry |
+| `? yt lofi`, `? aw hyprland` | web search: `g` `ddg` `yt` `gh` `aw` `aur` `w` `r`, without a shortcut DuckDuckGo |
+| `c what is a tarball` | short answer from Claude (`claude -p`), only sent on Enter; Enter again copies it |
 
-↑↓ selects, Tab cycles the modes, Esc or a click outside closes. Launch counts are kept
-in `launcher-usage.json` in Quickshell's state folder.
+Letters need a space after them: `s ` is Spotify, `s` alone still searches apps. ↑↓ selects,
+Tab and Shift+Tab cycle the modes, Esc or a click outside closes. Launch counts are kept in
+`launcher-usage.json` in Quickshell's state folder.
+
+**Timers and alarms** ring with a notification that stays until you pick *snooze* (10
+minutes) or *done*, and a sound for up to a minute. They get through silent mode like calls
+do and survive a shell restart (`alarms.json` in Quickshell's state folder). Alarm days:
+`m tu w th f sa su` (also `mon`, `thu`, `thr`, German `mo di mi do fr sa so`), ranges like
+`m-f` or `m-su`, lists like `m,w,f` or `tu,th`, and `daily`, `weekdays`, `weekend`. Without
+days the alarm rings once. `t` alone is ambiguous (tuesday or thursday) and the launcher
+asks for `tu` or `th`. In the list, Enter turns an alarm on or off, Shift+Enter deletes it.
+
+**Discord** needs Vesktop with the ShellBridge plugin running. Names match display names
+and usernames; for `d msg` give one word of the name. `d reply` goes to the last DM you
+wrote since Discord started; before that, to your most recent DM, and the info pane says so.
+
+**Claude** shows up only when the `claude` CLI is installed and signed in. It runs in an
+empty folder (`~/.local/state/frameshell/claude`), so no project files go along. Model and
+on/off: `claudeModel` and `claudeEnabled` in `config/Config.qml`, next to the web search
+engines, the file search folder and the snooze length.
 
 ## Bar and control center
 

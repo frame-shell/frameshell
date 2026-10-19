@@ -14,6 +14,8 @@ into its own shell.
 
 - A Quickshell shell: bar, control center with GoXLR faders and an app mixer, launcher,
   lockscreen, notifications, OSD and a wallpaper app
+- A launcher that does more than apps: Spotify, Discord DMs, timers and alarms,
+  emoji, files, ssh, clipboard, web search and Claude
 - Bridges to Discord (calls, voice joins, messages), the GoXLR and Spotify
 - Six themes for Ghostty, fish, Starship, Spotify, Vesktop, Zed, Dolphin, Zen and GRUB
 - `frame`, one command to install, update and switch themes
@@ -46,11 +48,11 @@ frame update             # pull and apply everything again
 frame status             # what is linked and what is missing
 ```
 
-The details are in [docs](docs/): [the shell](docs/shell.md), [themes](docs/themes.md)
+The details are in [docs](docs/): [the shell](docs/shell.md), [Spotify](docs/spotify.md), [themes](docs/themes.md)
 and [the frame command](docs/frame.md).
 
 > Work in progress. Everything above is built, but none of it has run on Linux yet;
-> that is the next step. After that: a hotkey overlay and Steam through Millennium.
+> that is the next step. After that: Steam through Millennium.
 
 Thanks to [system24](https://github.com/refact0r/system24) (the base of the Vesktop
 theme), [caelestia](https://github.com/caelestia-dots), [end-4's dots-hyprland](https://github.com/end-4/dots-hyprland)
