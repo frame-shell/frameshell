@@ -1,0 +1,65 @@
+"$schema" = "https://starship.rs/config-schema.json"
+
+# Roxy Dark – zwei runde „Pillen" (Ordner, Git) wie die Chips im Theme,
+# rechts Laufzeit und Uhrzeit, darunter der Eingabepfeil.
+# Die Symbole sind Nerd-Font-Zeichen; Ghostty bringt sie mit.
+
+palette = "roxy"
+add_newline = true
+
+format = """
+$directory\
+$git_branch\
+$git_status\
+$fill\
+$cmd_duration\
+$time\
+$line_break\
+$character"""
+
+[palettes.roxy]
+bg = "#0a0f1f"
+surface = "#111833"
+surface2 = "#1a2447"
+primary = "#4a7fe0"
+secondary = "#8fb0f0"
+text = "#dce6ff"
+muted = "#7a89b3"
+danger = "#ff6b8a"
+
+[directory]
+style = "bold fg:secondary bg:surface2"
+format = "[](fg:surface2)[ $path ]($style)[$read_only]($read_only_style)[](fg:surface2)"
+read_only = " "
+read_only_style = "fg:danger bg:surface2"
+truncation_length = 3
+truncation_symbol = "…/"
+
+[git_branch]
+symbol = ""
+style = "fg:primary bg:surface"
+format = " [](fg:surface)[ $symbol $branch ]($style)"
+
+# Schließt die Git-Pille ab, auch wenn alles sauber ist
+[git_status]
+style = "fg:muted bg:surface"
+format = "[($all_status$ahead_behind )]($style)[](fg:surface)"
+
+[fill]
+symbol = " "
+
+[cmd_duration]
+min_time = 2000
+style = "fg:muted"
+format = "[ $duration  ]($style)"
+
+[time]
+disabled = false
+time_format = "%H:%M"
+style = "fg:muted"
+format = "[$time]($style)"
+
+[character]
+success_symbol = "[❯](bold primary)"
+error_symbol = "[❯](bold danger)"
+vimcmd_symbol = "[❮](bold secondary)"

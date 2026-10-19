@@ -1,0 +1,23 @@
+# Ghostty – Roxy
+
+theme = roxy
+
+font-family = JetBrains Mono
+font-size = 12
+
+window-padding-x = 14
+window-padding-y = 12
+window-padding-balance = true
+window-decoration = none
+
+# Hyprland macht den Blur, Ghostty nur die Transparenz
+background-opacity = 0.92
+unfocused-split-opacity = 0.85
+
+cursor-style = bar
+cursor-style-blink = true
+mouse-hide-while-typing = true
+copy-on-select = clipboard
+confirm-close-surface = false
+
+shell-integration = fish
