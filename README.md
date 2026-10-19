@@ -1,11 +1,15 @@
 <p align="center">
-  <img src=".github/banner.svg" alt="roxy-dots" width="100%">
+  <img src=".github/banner.svg" alt="frameshell" width="100%">
 </p>
 
-My personal dotfiles for **CachyOS + Hyprland + Quickshell**.
-Dark blue-violet, TUI look, custom shell, everything built by hand.
+**frameshell** is a terminal-styled desktop for **CachyOS + Hyprland**: its own Quickshell
+shell (bar, control center, launcher, lockscreen, notifications, OSD, wallpaper app),
+bridges to Discord, GoXLR and Spotify, app themes generated from one palette, and the
+`frame` CLI that installs, updates and re-themes all of it.
 
-> Status: 🚧 work in progress. The setup is being built step by step.
+Square 1px frames with the label in the top line, JetBrains Mono everywhere, six themes.
+
+> Status: 🚧 work in progress. Built from Windows so far; nothing has run on Linux yet.
 
 ## Overview
 
@@ -13,10 +17,10 @@ Dark blue-violet, TUI look, custom shell, everything built by hand.
 |---|---|
 | Distro | CachyOS (AMD, open-source drivers) |
 | Compositor | Hyprland |
-| Shell (bar, OSD, popups, launcher, lockscreen) | Quickshell (QML) |
-| Wallpaper | linux-wallpaperengine / mpvpaper |
+| Shell (bar, OSD, popups, launcher, lockscreen, wallpapers) | Quickshell (QML) |
+| Wallpaper | linux-wallpaperengine / mpvpaper / swaybg |
 | Audio interface | GoXLR via `goxlr-utility` |
-| Discord | Vesktop (Vencord), TUI theme built on system24 |
+| Discord | Vesktop (Vencord), TUI theme built on system24, ShellBridge plugin |
 | Spotify | Spicetify, TUI theme |
 | Terminal | Ghostty |
 | Terminal shell | fish + Starship |
@@ -24,8 +28,59 @@ Dark blue-violet, TUI look, custom shell, everything built by hand.
 | Code editor | Zed, AI features off, file tree on the left |
 | Browser | Zen (vertical tabs), square TUI look through `userChrome.css` |
 | System info | fastfetch with your own image as ASCII logo |
-| Boot menu | GRUB theme, terminal style (`roxy grub`) |
-| Dotfile management | GNU Stow via the `roxy` CLI |
+| Boot menu | GRUB theme, terminal style (`frame grub`) |
+| Config management | GNU Stow via the `frame` CLI |
+
+## Themes
+
+Every app gets its colors from one theme file in `themes/`. Switch all of them at once:
+
+```bash
+frame theme list         # the themes, the active one marked
+frame theme set sakura   # rewrite every color file and reload what can reload
+```
+
+| Theme | Colors | primary | bg |
+|---|---|---|---|
+| `periwinkle` (default) | blue-violet | `#5d6fe8` | `#0b0c1f` |
+| `sakura` | pink | `#f06aa8` | `#1a0d17` |
+| `matcha` | green | `#5fd39a` | `#0c1410` |
+| `ember` | orange | `#f08a3c` | `#170f0a` |
+| `lagoon` | teal | `#3fc7d9` | `#08141a` |
+| `mono` | black and white; only errors, warnings and success keep a faint tint | `#ededed` | `#0a0a0a` |
+
+All themes share the same roles: `bg`, `surface`, `surface2`, `shadow`, `primary`,
+`secondary`, `accent`, `text`, `textDim`, `muted`, `frame`, `danger`, `warn`, `ok`, plus 16
+terminal colors (`ansi`) and the fonts. A new theme is one more JSON file with these keys.
+
+`frame install` asks for a theme once. After `frame theme set …`, Quickshell, Zed and
+Hyprland's window borders change right away; Spotify gets the theme applied again; new
+Ghostty windows and new shells pick it up; Dolphin and Zen need a restart; GRUB needs
+`frame grub` (sudo).
+
+### How the files are made
+
+Each app file with colors has a template in `themes/templates/<package>/<path>` with
+placeholders like `{{colors.primary}}`, `{{ansi.4}}` or `{{colors.surface2|lighten:8|bare}}`.
+`frame theme` fills them in and writes `<package>/<path>`, which Stow links as usual.
+Steps can be chained:
+
+| Step | Result for `#5d6fe8` |
+|---|---|
+| `lighten:N`, `darken:N` | N percent of white or black mixed in |
+| `mix:<key>:N` | N percent of another palette color mixed in, e.g. `mix:colors.text:20` |
+| `bare` | `5d6fe8` |
+| `rgb` | `93,111,232` |
+| `argb` | `#ff5d6fe8` |
+| `alpha:XX` | `#5d6fe8XX` (XX in hex) |
+
+The written files are git-ignored, so switching themes never shows up as a change in the
+repo; `frame install` and `frame update` write them before linking. Edit the template,
+never the output. `frame theme check` only reports files that do not match the active theme.
+
+Generated: Quickshell (`config/Theme.qml`), Ghostty, fish syntax colors, Starship, Spotify
+(`color.ini`), Vesktop, Hyprland window borders, Zed, Dolphin (KDE color scheme and qt6ct
+palette), Zen and GRUB (`theme.txt`; `frame grub` draws the 1px frame images itself).
 
 ## Planned features
 
@@ -36,128 +91,91 @@ Dark blue-violet, TUI look, custom shell, everything built by hand.
 - [ ] OSD for GoXLR faders and mutes, the GoXLR mic button, default output volume and keyboard layout (built, untested)
 - [ ] Custom notifications: TUI banners with actions and timer, bell with history, "silent" mode (built, untested)
 - [ ] Vencord plugin with a socket bridge to the shell: messages, voice joins/leaves (own and
-  watched channels), server events going live, calls with accept/decline, mute/deafen notices,
-  and actions back into Discord (built, test on Linux)
-- [ ] Later, once the setup runs on Linux and can be tested live:
-  - Millennium plugin for Steam, same bridge: game invites with accept/decline, friends
-    now playing, coming online, chat messages
-  - Steam theme for Millennium in the TUI look and Periwinkle palette
+  watched channels), server events going live, calls with accept/decline and missed-call
+  notices, mute/deafen notices, and actions back into Discord (built, test on Linux)
 - [ ] Launcher: fuzzy app search, calculator, run and power modes (built, untested)
 - [ ] Lockscreen: blurred desktop snapshot, weather panel, media, fade animation (built, untested)
 - [ ] Wallpapers: Wallpaper Engine scenes, videos and images, picked in their own app (built, untested)
-- [ ] Dolphin, Zed and Zen with themes generated from the palette (built, untested)
-- [ ] Generate the older app themes (Ghostty, fish, Starship, Spotify, Vencord, GRUB, Quickshell) with `roxy theme` too
-- [ ] Infinite-canvas workflow
-- [ ] Vencord theme generated from the same color palette (based on system24 theme)
-- [ ] Spotify theme (Spicetify), TUI style: labeled frames (lib, home, queue, player), square covers, `[ ⏸ ]` play button
-- [ ] Ghostty, fish, Starship and fastfetch in the Periwinkle palette
-- [ ] GRUB theme (ASCII art section planned for later)
+- [ ] Six themes for every app, switched with `frame theme set` (built, untested)
 - [ ] Hotkey overlay (holding Super highlights bound keys), later on keyboard LEDs
-- [ ] Multi-theme switcher
-
-## Theme: Periwinkle
-
-A dark blue-violet palette. All colors come from a single source, `themes/roxy.json`.
-
-| Role | Hex |
-|---|---|
-| bg | `#0b0c1f` |
-| surface | `#13153a` |
-| surface2 | `#1e2256` |
-| shadow | `#3f4bb8` |
-| primary | `#5d6fe8` |
-| secondary | `#93a4f7` |
-| violet | `#a48cf2` |
-| text | `#e1e4ff` |
-| textDim | `#bcc1ea` |
-| muted | `#8086b8` |
-| frame | `#545b96` |
-| danger | `#ff6b9a` |
-| warn | `#f2c97d` |
-| green | `#6ee0b6` |
-
-`roxy theme` writes the app color files from it. Each one has a template in
-`themes/templates/<package>/<path>` with placeholders such as `{{colors.primary}}`,
-`{{ansi.4}}` or `{{colors.bg|rgb}}` (filters: `rgb` → `93,111,232`, `argb` → `#ff5d6fe8`,
-`bare` → `5d6fe8`, `alpha:NN` → `#5d6fe8NN`). The output lands in `<package>/<path>` and is
-committed, so a fresh install works without running it. `roxy theme check` only reports
-files that no longer match.
-
-So far Zed, Dolphin (KDE color scheme and qt6ct palette) and Zen are generated; Ghostty,
-fish, Starship, Spotify, Vencord, GRUB and Quickshell still carry the values by hand.
-Additional themes can be added later as extra JSON files.
+- [ ] Later, once the setup runs on Linux and can be tested live:
+  - Millennium plugin for Steam, same bridge: game invites with accept/decline, friends
+    now playing, coming online, chat messages
+  - Steam theme for Millennium in the TUI look, generated from the themes
+  - GRUB ASCII art section
 
 ## Structure
 
 ```
-roxy-dots/
-├── hypr/              # roxy/shell.conf (keybinds, autostart), roxy/apps.conf, hypridle.conf
+frameshell/
+├── frame              # CLI: install, update, remove, backup, restore, theme, grub, wallpaper, status
+├── themes/            # periwinkle.json, sakura.json, … and templates/ for frame theme
+├── hypr/              # frame/shell.conf (keybinds, autostart), frame/apps.conf, hypridle.conf
 ├── quickshell/.config/quickshell/
 │   ├── shell.qml      # Entry point
-│   ├── config/        # Theme.qml (palette, fonts, timings), Config.qml (your settings)
+│   ├── config/        # Theme.qml (generated), Config.qml (your settings)
 │   ├── components/    # Frame, Meter, TuiSlider, TuiButton, AppIcon
-│   ├── services/      # Weather, Apps, SystemStats, Audio (PipeWire), GoXLR, Toggles
+│   ├── services/      # Weather, Apps, SystemStats, Audio, GoXLR, Toggles, Notifications, DiscordBridge, Wallpapers
 │   ├── lockscreen/    # Lock, LockContext (PAM), LockSurface (UI), pam/
 │   ├── bar/           # Top bar: workspaces, title, clock, media, stats, volume
 │   ├── controlcenter/ # Control center (session, toggles, faders, stats) and app mixer
 │   ├── launcher/      # Launcher (window, IPC), LauncherView (apps, calc, run, power)
-│   ├── osd/           # Overlays: GoXLR, mute, volume (planned)
+│   ├── osd/           # Fader, mute, volume and layout notices
+│   ├── wallpapers/    # Wallpaper app (Super+W)
 │   ├── media/         # Spotify popup on song change (MPRIS)
-│   └── notifications/ # Daemon, popup cards, history; Discord bridge in services/
-├── roxy               # CLI: install, remove, update, status
-├── ghostty/           # Terminal config + color theme
-├── fish/              # conf.d/roxy.fish: syntax colors, Starship, fastfetch greeting
-├── starship/          # TUI frame prompt with git and language segments
-├── fastfetch/         # System info, logo from assets/roxy.png
-├── spicetify/         # Spotify theme (color.ini + user.css)
-├── themes/            # roxy.json (palette) and templates/ for roxy theme
-├── vencord/           # Vesktop theme (system24 + Periwinkle) and plugins/shellBridge
-├── wallpaper/         # roxy-wallpaper: backends for the wallpaper app
-├── zed/               # settings.json + generated Periwinkle theme
+│   └── notifications/ # Popup cards and history
+├── ghostty/           # Terminal config (+ generated color theme)
+├── fish/              # conf.d/frameshell.fish: Starship, fastfetch greeting (+ generated colors)
+├── starship/          # generated TUI frame prompt with git and language segments
+├── fastfetch/         # System info, logo from assets/logo.png
+├── spicetify/         # Spotify theme (user.css + generated color.ini)
+├── vencord/           # generated Vesktop theme (system24) and plugins/shellBridge
+├── wallpaper/         # frame-wallpaper: backends for the wallpaper app
+├── zed/               # settings.json (+ generated theme)
 ├── dolphin/           # generated KDE color scheme + qt6ct palette
-├── zen/               # user.js + chrome/userChrome.css, linked into the Zen profile
-├── grub/roxy/         # GRUB theme, copied to /boot by `roxy grub`
-├── assets/            # Characters, wallpapers per theme
-├── PLAN.md
+├── zen/               # generated user.js + chrome/userChrome.css, linked into the Zen profile
+├── assets/            # your logo and wallpapers (git-ignored)
 └── README.md
 ```
 
 ## Installation
 
 ```bash
-git clone git@github.com:vxnsin/roxy-dots.git ~/roxy-dots
-~/roxy-dots/roxy install
+git clone git@github.com:vxnsin/frameshell.git ~/frameshell
+~/frameshell/frame install
 ```
 
-`roxy install` installs the missing packages (through `paru`/`yay`), moves existing
-configs to `~/.local/state/roxy-dots/backup/`, links the configs with GNU Stow, applies
-the Spotify theme and puts `roxy` into `~/.local/bin`.
+`frame install` installs the missing packages (through `paru`/`yay`), asks for a theme
+and writes its color files, moves existing configs to `~/.local/state/frameshell/backup/`,
+links the configs with GNU Stow, applies the Spotify theme and puts `frame` into
+`~/.local/bin`.
 
 ```bash
-roxy status                 # what is linked, what is missing
-roxy install starship fish  # only some packages
-roxy install --dry-run      # show what would happen
-roxy update                 # git pull, backup, relink, re-apply app themes
-roxy update spicetify       # after a Spotify update wiped the theme
-roxy remove spicetify       # unlink a package
-roxy backup                 # snapshot configs and app settings
-roxy restore                # list backups
-roxy restore latest         # put the newest one back
-roxy grub                   # theme the GRUB boot menu (sudo)
-roxy grub remove            # switch it off again
-roxy theme                  # write the app color files from themes/roxy.json
-roxy wallpaper backend mpv  # wallpaper backend: both, mpv or image
+frame status                 # what is linked, what is missing, active theme
+frame install starship fish  # only some packages
+frame install --dry-run      # show what would happen
+frame update                 # git pull, backup, re-render, relink, re-apply app themes
+frame update spicetify       # after a Spotify update wiped the theme
+frame remove spicetify       # unlink a package
+frame backup                 # snapshot configs and app settings
+frame restore                # list backups
+frame restore latest         # put the newest one back
+frame theme list             # themes; frame theme set <name> switches
+frame grub                   # theme the GRUB boot menu (sudo)
+frame grub remove            # switch it off again
+frame wallpaper backend mpv  # wallpaper backend: both, mpv or image
 ```
 
-`roxy grub` only works when the system boots with GRUB (`/boot/grub/grub.cfg` exists;
+`frame grub` only works when the system boots with GRUB (`/boot/grub/grub.cfg` exists;
 the CachyOS installer also offers systemd-boot and Limine). It builds the fonts from
-JetBrains Mono, copies the theme to `/boot/grub/themes/roxy`, sets `GRUB_THEME` in
-`/etc/default/grub` (the original is saved once to `~/.local/state/roxy-dots/`) and
-rebuilds `grub.cfg`. `roxy update` refreshes an installed GRUB theme too.
+JetBrains Mono, draws the frame images in the theme colors, copies everything to
+`/boot/grub/themes/frameshell`, sets `GRUB_THEME` in `/etc/default/grub` (the original is
+saved once to `~/.local/state/frameshell/`) and rebuilds `grub.cfg`. `frame update`
+refreshes an installed GRUB theme too.
 
-Backups live in `~/.local/state/roxy-dots/backup/` (one folder per snapshot, named by date
+Backups live in `~/.local/state/frameshell/backup/` (one folder per snapshot, named by date
 and reason). `install` moves conflicting configs there, `update` and `restore` take a
-snapshot before they change anything. `update` also updates the `roxy` CLI itself.
+snapshot before they change anything. `update` also updates the `frame` CLI itself.
 
 Packages: `ghostty`, `fish`, `starship`, `fastfetch`, `spicetify`, `vencord`, `quickshell`,
 `hypr`, `wallpaper`, `zed`, `dolphin`, `zen`. Each package folder mirrors the home directory
@@ -165,25 +183,27 @@ Packages: `ghostty`, `fish`, `starship`, `fastfetch`, `spicetify`, `vencord`, `q
 
 Manual steps:
 
-- **fastfetch logo:** put any PNG at `assets/roxy.png`; fastfetch renders it as ASCII art.
-- **Spotify:** install and open Spotify once before `roxy install spicetify`.
-- **Vesktop:** start it once, then close it before `roxy install vencord` so the theme can be
-  switched on automatically (otherwise: Settings → Themes → Roxy).
-- **Font:** JetBrains Mono everywhere (TUI look); `roxy` installs `ttf-jetbrains-mono`
+- **fastfetch logo:** put any PNG at `assets/logo.png`; fastfetch renders it as ASCII art.
+- **Spotify:** install and open Spotify once before `frame install spicetify`.
+- **Vesktop:** start it once, then close it before `frame install vencord` so the theme can be
+  switched on automatically (otherwise: Settings → Themes → Frameshell).
+- **Font:** JetBrains Mono everywhere (TUI look); `frame` installs `ttf-jetbrains-mono`
   and the Nerd Font build for icons.
-- **Hyprland:** `roxy install hypr` adds `source = ~/.config/hypr/roxy/shell.conf` to your
-  own `hyprland.conf` (backed up first). Remove older SUPER+L, SUPER+SPACE or SUPER+C
-  binds or a second `exec-once = hypridle` if your config has them.
+- **Hyprland:** `frame install hypr` adds `source = ~/.config/hypr/frame/shell.conf` to your
+  own `hyprland.conf` (backed up first). Remove older SUPER+L, SUPER+SPACE, SUPER+C,
+  SUPER+W, SUPER+E or SUPER+B binds or a second `exec-once = hypridle` if your config has
+  them. `frame/shell.conf` also sources `frame/colors.conf` (window borders in the theme
+  colors); drop that line to keep your own.
 - **Weather:** set your city in `quickshell/.config/quickshell/config/Config.qml`
   (`weatherLocation`); empty means wttr.in guesses it from your IP.
-- **Zen:** start it once and close it, then `roxy install zen`; its files go into the
+- **Zen:** start it once and close it, then `frame install zen`; its files go into the
   profile folder, which only exists after the first start.
-- **Dolphin:** log out and in once after `roxy install dolphin`, so Hyprland sets
+- **Dolphin:** log out and in once after `frame install dolphin`, so Hyprland sets
   `QT_QPA_PLATFORMTHEME=qt6ct`.
 - **Wallpaper Engine:** needs Wallpaper Engine bought on Steam; subscribed Workshop items
   show up in the wallpaper app.
 
-Not covered by `roxy` yet: Hyprland itself, `goxlr-utility`.
+Not covered by `frame` yet: Hyprland itself, `goxlr-utility`.
 
 ## Launcher
 
@@ -208,9 +228,10 @@ It flies up while the lockscreen takes over and drops back in after unlocking.
 Super+C (or the slider button in the bar) opens the control center:
 
 - **session:** user, uptime, lock, sleep, reboot, off (reboot and off need a second click)
-- **toggles:** wi-fi (`nmcli`), bluetooth, silent (for the notification module, planned),
-  stay awake (blocks idle lock and screen-off), game mode (animations and blur off,
-  `powerprofilesctl set performance`), mic mute (the GoXLR mic fader mute)
+- **toggles:** wi-fi (`nmcli`), bluetooth, silent (notifications only on the bell), stay
+  awake (blocks idle lock and screen-off), game mode (animations and blur off,
+  `powerprofilesctl set performance`), mic mute (the GoXLR mic fader mute);
+  **wallpapers ›** opens the wallpaper app
 - **goxlr faders:** levels follow the physical faders, the mute buttons work from here
 - **system:** CPU with a one-minute curve, GPU, VRAM (amdgpu), RAM, disk, network
 
@@ -235,8 +256,8 @@ switched. There is no keyboard volume control; the levels live on the GoXLR.
 
 Super+W (or **wallpapers ›** in the control center) opens the wallpaper app: search by
 title and tags, filter by type and screen, pick backend and playback settings (FPS limit,
-sound, scaling, pause in fullscreen). It is a front end for `roxy-wallpaper`, which
-Hyprland also runs at login (`roxy-wallpaper apply`).
+sound, scaling, pause in fullscreen). It is a front end for `frame-wallpaper`, which
+Hyprland also runs at login (`frame-wallpaper apply`).
 
 | Backend | Shows |
 |---|---|
@@ -245,23 +266,24 @@ Hyprland also runs at login (`roxy-wallpaper apply`).
 | `image` | only still images, lowest power use |
 
 Folders: `~/Pictures/wallpapers` and `assets/wallpapers`; Workshop items come from
-`~/.local/share/Steam/steamapps/workshop/content/431960`. `roxy install wallpaper` asks for
-the backend once; `roxy wallpaper backend both|mpv|image` changes it later. Everything is
-kept in `~/.local/state/roxy-dots/wallpaper.json`. The lockscreen blurs a still snapshot,
-so moving wallpapers do not run behind it.
+`~/.local/share/Steam/steamapps/workshop/content/431960`. `frame install wallpaper` asks for
+the backend once; `frame wallpaper backend both|mpv|image` changes it later. Everything is
+kept in `~/.local/state/frameshell/wallpaper.json`. A screen without a wallpaper shows the
+theme's background color. The lockscreen blurs a still snapshot, so moving wallpapers do
+not run behind it.
 
 ## Apps
 
-| App | Key | Set up by roxy |
+| App | Key | Set up by frame |
 |---|---|---|
-| Dolphin | Super+E | Periwinkle color scheme, qt6ct (Fusion, palette, JetBrains Mono, Breeze Dark icons), "Open with" list outside Plasma, default for folders |
-| Zed | Super+Shift+E | Periwinkle theme, AI off, file tree on the left (Ctrl+B hides it, Ctrl+Shift+E focuses it), fish in the terminal panel (Ctrl+J), no sign-in or telemetry, default for text files |
-| Zen | Super+B | accent, dark mode and square corners in `user.js`, Periwinkle `userChrome.css`, default browser |
+| Dolphin | Super+E | theme color scheme, qt6ct (Fusion, palette, JetBrains Mono, Breeze Dark icons), "Open with" list outside Plasma, default for folders |
+| Zed | Super+Shift+E | theme, AI off, file tree on the left (Ctrl+B hides it, Ctrl+Shift+E focuses it), fish in the terminal panel (Ctrl+J), no sign-in or telemetry, default for text files |
+| Zen | Super+B | accent, dark mode and square corners in `user.js`, theme `userChrome.css`, default browser |
 
 SFTP in Dolphin: type `sftp://user@host/path` into the address bar; right-click the
 sidebar → **Add Entry** keeps the server there. Dolphin, Zed and Zen ask before they become
 default apps. Zed's `settings.json` is linked from the repo, so changes made in Zed end up
-in `~/roxy-dots/zed`.
+in `~/frameshell/zed`.
 
 ## Notifications and media
 
@@ -287,21 +309,22 @@ them over MPRIS (Spotify yes, a YouTube tab usually not).
   notice with "call back" (declining inside Discord itself also shows up as missed)
 - your own mute and deafen changes, with "unmute"/"undeafen"
 
-`roxy install vencord` sets it up: it clones Vencord to `~/.local/share/roxy-dots/vencord`,
+`frame install vencord` sets it up: it clones Vencord to `~/.local/share/frameshell/vencord`,
 adds ShellBridge, builds it with pnpm, points Vesktop at that build and turns on theme
-and plugin (close Vesktop for that step). `roxy update` rebuilds only when Vencord or the
+and plugin (close Vesktop for that step). `frame update` rebuilds only when Vencord or the
 plugin changed. Not tested yet.
 
-`roxy install quickshell` also looks for mako, dunst and swaync (running, as a user
+`frame install quickshell` also looks for mako, dunst and swaync (running, as a user
 service or in `exec-once`) and offers to turn them off, since only one program can
-receive notifications. `roxy restore` brings them back.
+receive notifications. `frame restore` brings them back.
 
 ## Lockscreen
 
 Super+L (or `qs ipc call lock lock`, or hypridle after 10 minutes) takes a snapshot of
 every screen, locks the session and blurs that snapshot behind the clock, password field,
-weather panel, media controls and keyboard status. Unlocking plays the animation backwards.
-The password is checked by PAM with `lockscreen/pam/password.conf` (password only).
+weather panel, media controls and keyboard status. The login only shows on the screen
+you were on; the others show the blur. Unlocking plays the animation backwards. The
+password is checked by PAM with `lockscreen/pam/password.conf` (password only).
 
 If Quickshell crashes while locked, Hyprland keeps the screen locked on purpose. To get
 back in: switch to a TTY (Ctrl+Alt+F3), log in, then run
@@ -318,8 +341,8 @@ and switch back (Ctrl+Alt+F1 or F2). The new lockscreen takes over and unlocks n
 
 ## Note on assets
 
-Character artwork and wallpapers are not part of this repo unless I made them myself.
-The `assets/` folder is therefore listed in `.gitignore`.
+Logos and wallpapers are not part of this repo unless I made them myself. The `assets/`
+folder is therefore listed in `.gitignore`.
 
 ## Inspiration
 

@@ -1,0 +1,1481 @@
+#!/usr/bin/env bash
+# frame – install and manage frameshell, a terminal-styled desktop for CachyOS + Hyprland
+#
+#   frame install [package...]   install dependencies and link configs (default: all)
+#   frame update  [package...]   git pull, back up, relink and re-apply app themes
+#   frame remove  <package...>   unlink configs (dependencies stay installed)
+#   frame backup  [package...]   snapshot the current configs and app settings
+#   frame restore [name|latest]  list backups, or put one back
+#   frame theme [list|set <name>|check]
+#                                write every app color file from themes/<name>.json
+#   frame grub [install|remove]  theme the GRUB boot menu (copies to /boot, needs sudo)
+#   frame wallpaper <args…>      passed to frame-wallpaper (backend, set, apply, …)
+#   frame status                 show what is linked and what is missing
+#
+# Options: -n/--dry-run (print what would happen), -y/--yes (no questions)
+
+set -euo pipefail
+
+REPO="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
+STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/frameshell"
+BACKUP_ROOT="$STATE_DIR/backup"
+GRUB_THEME_DIR="/boot/grub/themes/frameshell"
+GRUB_DEFAULT_FILE="/etc/default/grub"
+VENCORD_SRC="${XDG_DATA_HOME:-$HOME/.local/share}/frameshell/vencord"
+THEME_STATE="$STATE_DIR/theme"
+DEFAULT_THEME=periwinkle
+
+PACKAGES=(ghostty fish starship fastfetch spicetify vencord quickshell hypr wallpaper zed dolphin zen)
+
+# Distro packages each config needs; AUR ones go through paru/yay
+declare -A DEPS=(
+  [ghostty]="ghostty"
+  [fish]="fish"
+  [starship]="starship"
+  [fastfetch]="fastfetch chafa"
+  [spicetify]="spicetify-cli ttf-jetbrains-mono"
+  [vencord]="vesktop ttf-jetbrains-mono jq git nodejs pnpm"
+  [quickshell]="quickshell ttf-jetbrains-mono ttf-jetbrains-mono-nerd wl-clipboard libpulse pciutils"
+  [hypr]="hypridle"
+  # ffmpeg makes the video thumbnails in the wallpaper app; linux-wallpaperengine
+  # comes on top when the "both" backend is picked
+  [wallpaper]="jq swaybg mpvpaper ffmpeg"
+  [zed]="zed ttf-jetbrains-mono"
+  # kio-extras: sftp:// and thumbnails; konsole: the F4 terminal panel;
+  # archlinux-xdg-menu: the "Open with" list outside Plasma
+  [dolphin]="dolphin kio-extras ffmpegthumbs kdegraphics-thumbnailers konsole qt6ct archlinux-xdg-menu breeze-icons ttf-jetbrains-mono"
+  [zen]="zen-browser-bin ttf-jetbrains-mono"
+)
+
+# App files outside the repo that frame touches or that belong in a backup
+declare -A EXTRAS=(
+  [fish]=".config/fish/config.fish"
+  [spicetify]=".config/spicetify/config-xpui.ini"
+  [vencord]=".config/vesktop/settings/settings.json"
+  [hypr]=".config/hypr/hyprland.conf"
+  [wallpaper]=".local/state/frameshell/wallpaper.json"
+  [dolphin]=".config/dolphinrc .config/qt6ct/qt6ct.conf .config/kdeglobals"
+)
+
+DRY_RUN=0
+ASSUME_YES=0
+NO_PULL=0
+LAST_BACKUP=""
+
+# ── Output ───────────────────────────────────────────────────
+
+# The active theme: its name is kept in $THEME_STATE, periwinkle until one is picked
+current_theme() {
+  local t=""
+  [[ -f $THEME_STATE ]] && t=$(<"$THEME_STATE")
+  [[ -n $t && -f $REPO/themes/$t.json ]] || t=$DEFAULT_THEME
+  echo "$t"
+}
+
+# theme_hex <theme> <role>: "5d6fe8" from themes/<theme>.json, without needing jq
+theme_hex() {
+  sed -n "s/.*\"$2\": *\"#\([0-9a-fA-F]\{6\}\)\".*/\1/p" "$REPO/themes/$1.json" 2>/dev/null | head -n 1
+}
+
+# 24-bit escape for a hex color: fg_hex 5d6fe8 (foreground) or bg_hex 5d6fe8 (background)
+fg_hex() { printf '\e[38;2;%d;%d;%dm' "0x${1:0:2}" "0x${1:2:2}" "0x${1:4:2}"; }
+bg_hex() { printf '\e[48;2;%d;%d;%dm' "0x${1:0:2}" "0x${1:2:2}" "0x${1:4:2}"; }
+
+# Colors on a terminal, taken from the active theme; FORCE_COLOR keeps them in logs,
+# NO_COLOR turns them off
+USE_COLOR=0
+if [[ -n ${FORCE_COLOR:-} || ( -t 1 && -z ${NO_COLOR:-} ) ]]; then
+  USE_COLOR=1
+  theme_now=$(current_theme)
+  role() { local h; h=$(theme_hex "$theme_now" "$1"); fg_hex "${h:-$2}"; }
+  c_text=$(role text e1e4ff)
+  c_primary=$(role primary 5d6fe8)
+  c_secondary=$(role secondary 93a4f7)
+  c_muted=$(role muted 8086b8)
+  c_ok=$(role ok 6ee0b6)
+  c_warn=$(role warn f2c97d)
+  c_danger=$(role danger ff6b9a)
+  c_bold=$'\e[1m'
+  c_reset=$'\e[0m'
+  unset -f role
+else
+  c_text='' c_primary='' c_secondary='' c_muted='' c_ok='' c_warn='' c_danger='' c_bold='' c_reset=''
+fi
+
+header() {
+  printf '\n  %s%sframe%s  %sframeshell · CachyOS · Hyprland%s\n\n' \
+    "$c_bold" "$c_primary" "$c_reset" "$c_muted" "$c_reset"
+}
+
+step() { printf '\n%s●%s %s%s%s\n' "$c_primary" "$c_reset" "$c_bold" "$*" "$c_reset"; }
+info() { printf '  %s%s%s\n' "$c_muted" "$*" "$c_reset"; }
+ok()   { printf '  %s✓%s %s\n' "$c_ok" "$c_reset" "$*"; }
+warn() { printf '  %s!%s %s\n' "$c_warn" "$c_reset" "$*"; }
+die()  { printf '%s✗%s %s\n' "$c_danger" "$c_reset" "$*" >&2; exit 1; }
+
+# Runs a command, or only prints it in dry-run mode
+run() {
+  if ((DRY_RUN)); then
+    printf '  %swould run:%s %s\n' "$c_muted" "$c_reset" "$*"
+    return 0
+  fi
+  "$@"
+}
+
+# Like run, but hides the command's own output
+run_quiet() {
+  if ((DRY_RUN)); then
+    run "$@"
+    return 0
+  fi
+  "$@" >/dev/null 2>&1
+}
+
+confirm() {
+  ((ASSUME_YES)) && return 0
+  local answer=""
+  printf '  %s [Y/n] ' "$1"
+  read -r answer || true
+  # Typed answers are already on screen; piped ones are echoed so logs read right
+  [[ -t 0 ]] || printf '%s\n' "${answer:-y}"
+  [[ -z $answer || $answer =~ ^[YyJj] ]]
+}
+
+# choose <question> <key|description>...: prints the picked key; the first is the default.
+# The menu goes to stderr, so the answer can be captured with $(…).
+choose() {
+  local question=$1 answer="" i=1 opt
+  shift
+  local opts=("$@")
+  if ((ASSUME_YES)); then
+    echo "${opts[0]%%|*}"
+    return 0
+  fi
+  printf '  %s\n' "$question" >&2
+  for opt in "${opts[@]}"; do
+    printf '    %s%d%s %-11s %s%s%s\n' "$c_primary" "$i" "$c_reset" "${opt%%|*}" "$c_muted" "${opt#*|}" "$c_reset" >&2
+    i=$((i + 1))
+  done
+  printf '  Pick 1-%d [1] ' "${#opts[@]}" >&2
+  read -r answer || true
+  [[ -t 0 ]] || printf '%s\n' "${answer:-1}" >&2
+  [[ $answer =~ ^[0-9]+$ ]] && ((answer >= 1 && answer <= ${#opts[@]})) || answer=1
+  echo "${opts[answer - 1]%%|*}"
+}
+
+usage() {
+  header
+  cat <<EOF
+  ${c_bold}Usage${c_reset}  frame <command> [package...] [options]
+
+  ${c_bold}Commands${c_reset}
+    install [pkg...]      install dependencies and link configs (default: all)
+    update  [pkg...]      git pull, back up, relink and re-apply app themes
+                          (run "frame update spicetify" after a Spotify update)
+    remove  <pkg...>      unlink configs, dependencies stay installed
+    backup  [pkg...]      snapshot the current configs and app settings
+    restore [name|latest] list backups, or put one back
+    theme                 write every app color file from the active theme
+    theme list            show the themes, the active one marked
+    theme set <name>      switch every app to another theme
+    theme check           only report files that are out of date
+    grub [install|remove] theme the GRUB boot menu (copies to /boot, needs sudo)
+    wallpaper <…>         wallpaper backends, e.g. "frame wallpaper backend mpv"
+                          (both|mpv|image; all commands: frame wallpaper help)
+    status                show what is linked and what is missing
+
+  ${c_bold}Options${c_reset}
+    -n, --dry-run         print what would happen, change nothing
+    -y, --yes             do not ask for confirmation
+
+  ${c_bold}Packages${c_reset}  ${PACKAGES[*]}
+  ${c_bold}Themes${c_reset}    $(theme_ids | tr '\n' ' ')
+
+EOF
+}
+
+# ── Helpers ──────────────────────────────────────────────────
+
+is_package() {
+  local p
+  for p in "${PACKAGES[@]}"; do [[ $p == "$1" ]] && return 0; done
+  return 1
+}
+
+need_arch() {
+  command -v pacman >/dev/null || die "frame needs an Arch-based system (pacman not found)."
+}
+
+has_pkg() {
+  command -v pacman >/dev/null && pacman -Qq "$1" &>/dev/null
+}
+
+aur_helper() {
+  local h
+  for h in paru yay; do
+    command -v "$h" >/dev/null && { echo "$h"; return 0; }
+  done
+  return 0
+}
+
+deps_of() {
+  local p d
+  for p in "$@"; do
+    for d in ${DEPS[$p]}; do echo "$d"; done
+  done
+}
+
+install_deps() {
+  local missing=() p helper
+  # Several packages need the same fonts; ask for each package once
+  for p in "$@"; do
+    [[ " ${missing[*]} " == *" $p "* ]] && continue
+    has_pkg "$p" || missing+=("$p")
+  done
+  if ((${#missing[@]} == 0)); then
+    ok "All dependencies already installed"
+    return 0
+  fi
+  info "Missing: ${missing[*]}"
+
+  local noconfirm=()
+  ((ASSUME_YES)) && noconfirm=(--noconfirm)
+  helper="$(aur_helper)"
+  if [[ -n $helper ]]; then
+    run "$helper" -S --needed "${noconfirm[@]}" "${missing[@]}"
+  else
+    warn "No AUR helper (paru/yay) found, AUR packages like spicetify-cli will fail"
+    run sudo pacman -S --needed "${noconfirm[@]}" "${missing[@]}"
+  fi
+}
+
+# Zen's default profile folder, from profiles.ini: the [Install…] entry wins, then the
+# profile marked Default=1, then the first one. Prints nothing before Zen's first start.
+zen_profile() {
+  local dir ini path
+  for dir in "$HOME/.zen" "${XDG_CONFIG_HOME:-$HOME/.config}/zen"; do
+    ini="$dir/profiles.ini"
+    [[ -f $ini ]] || continue
+    path=$(awk -F= '
+      /^\[/ { install = ($0 ~ /^\[Install/); profile = ($0 ~ /^\[Profile/); marked = 0; last = ""; next }
+      install && $1 == "Default" && !inst { inst = substr($0, 9) }
+      profile && $1 == "Path" { p = substr($0, 6); if (!first) first = p; last = p }
+      profile && $1 == "Default" && $2 == "1" { marked = 1 }
+      profile && marked && last != "" && !def { def = last }
+      END { print (inst != "" ? inst : (def != "" ? def : first)) }
+    ' "$ini")
+    [[ -n $path ]] || continue
+    [[ $path == /* ]] || path="$dir/$path"
+    [[ -d $path ]] && { echo "$path"; return 0; }
+  done
+  return 0
+}
+
+# Where a package is linked to: $HOME, except Zen, whose files go into its profile.
+# Prints nothing if that folder does not exist yet.
+pkg_root() {
+  case $1 in
+    zen) zen_profile ;;
+    *) echo "$HOME" ;;
+  esac
+}
+
+# Files of a package, relative to the package root
+pkg_files() {
+  [[ -d $REPO/$1 ]] || return 0
+  (cd "$REPO/$1" && find . \( -type f -o -type l \) | sed 's|^\./||' | sort)
+}
+
+# Repo files plus the app files listed in EXTRAS, relative to $HOME (for backups)
+managed_files() {
+  local root prefix="" f extra
+  root="$(pkg_root "$1")"
+  [[ -n $root ]] || return 0
+  [[ $root == "$HOME" ]] || prefix="${root#"$HOME"/}/"
+  while IFS= read -r f; do echo "$prefix$f"; done < <(pkg_files "$1")
+  for extra in ${EXTRAS[$1]:-}; do echo "$extra"; done
+}
+
+# Prints linked, partial or missing
+link_state() {
+  local pkg=$1 f root total=0 linked=0
+  root="$(pkg_root "$pkg")"
+  [[ -n $root ]] || { echo missing; return 0; }
+  while IFS= read -r f; do
+    total=$((total + 1))
+    if [[ -L $root/$f && "$(readlink -f "$root/$f")" == "$REPO/$pkg/$f" ]]; then
+      linked=$((linked + 1))
+    fi
+  done < <(pkg_files "$pkg")
+  if ((total > 0 && linked == total)); then echo linked
+  elif ((linked > 0)); then echo partial
+  else echo missing
+  fi
+}
+
+installed_packages() {
+  local p
+  for p in "${PACKAGES[@]}"; do
+    [[ $(link_state "$p") == missing ]] || echo "$p"
+  done
+}
+
+new_backup_dir() {
+  echo "$BACKUP_ROOT/$(date +%Y%m%d-%H%M%S)-$1"
+}
+
+# Copies files (relative to $HOME, symlinks resolved) into a new backup
+snapshot_files() {
+  local reason=$1 f n=0
+  shift
+  LAST_BACKUP="$(new_backup_dir "$reason")"
+  for f in "$@"; do
+    [[ -e $HOME/$f ]] || continue
+    run mkdir -p "$LAST_BACKUP/$(dirname "$f")"
+    run cp -L "$HOME/$f" "$LAST_BACKUP/$f"
+    n=$((n + 1))
+  done
+  if ((n)); then ok "Backup $(basename "$LAST_BACKUP") ($n files)"; else info "Nothing to back up"; fi
+}
+
+snapshot_pkgs() {
+  local reason=$1 p f files=()
+  shift
+  for p in "$@"; do
+    while IFS= read -r f; do files+=("$f"); done < <(managed_files "$p")
+  done
+  snapshot_files "$reason" "${files[@]}"
+}
+
+# Moves existing files that would block stow into the backup folder
+backup_conflicts() {
+  local pkg=$1 dest=$2 f target root
+  root="$(pkg_root "$pkg")"
+  while IFS= read -r f; do
+    target="$root/$f"
+    [[ -e $target || -L $target ]] || continue
+    [[ "$(readlink -f "$target")" == "$REPO/$pkg/$f" ]] && continue
+    warn "Backing up existing ~/$f"
+    run mkdir -p "$dest/$(dirname "$f")"
+    run mv "$target" "$dest/$f"
+  done < <(pkg_files "$pkg")
+}
+
+# stow_pkg <-R|-D> <package>; --no-folding links single files, so apps never write into the repo
+stow_pkg() {
+  local root
+  root="$(pkg_root "$2")"
+  run stow --no-folding -d "$REPO" -t "$root" "$1" "$2"
+}
+
+# Backs up whatever is in the way, then links the package; skips packages whose
+# target folder does not exist yet (Zen before its first start)
+link_pkg() {
+  local pkg=$1 backup=$2
+  if [[ -z $(pkg_root "$pkg") ]]; then
+    warn "Nothing to link into yet"
+    return 0
+  fi
+  backup_conflicts "$pkg" "$backup"
+  stow_pkg -R "$pkg"
+  ok "Config linked"
+}
+
+# Backup folder names, newest first
+list_backups() {
+  [[ -d $BACKUP_ROOT ]] || return 0
+  find "$BACKUP_ROOT" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort -r
+}
+
+link_self() {
+  local bin="$HOME/.local/bin/frame"
+  [[ "$(readlink -f "$bin" 2>/dev/null)" == "$REPO/frame" ]] && return 0
+  run mkdir -p "$HOME/.local/bin"
+  run ln -sf "$REPO/frame" "$bin"
+  ok "frame is now available as a command (~/.local/bin/frame)"
+}
+
+run_post() {
+  if declare -F "post_$1" >/dev/null; then "post_$1"; fi
+}
+
+# ── Per-package follow-up steps (also run by update) ─────────
+
+post_fish() {
+  if [[ ${SHELL##*/} != fish ]]; then
+    info "fish is not your login shell. To change it: chsh -s $(command -v fish || echo /usr/bin/fish)"
+  fi
+}
+
+post_fastfetch() {
+  if [[ ! -f $REPO/assets/logo.png ]]; then
+    warn "No logo at assets/logo.png, fastfetch shows the distro logo instead"
+    info "Put a PNG of your choice there (the folder is git-ignored)"
+  fi
+}
+
+# Spotify updates wipe spicetify's changes, so this runs on every update
+post_spicetify() {
+  if ! command -v spicetify >/dev/null && ((!DRY_RUN)); then
+    warn "spicetify not found, skipping theme activation"
+    return 0
+  fi
+  run spicetify config current_theme Frameshell color_scheme Frameshell
+
+  # apply fails on a fresh install or after a Spotify update; a new backup fixes both
+  # The quiet first try avoids spicetify's "you haven't backed up" error on a fresh install
+  if run_quiet spicetify apply || run spicetify backup apply; then
+    ok "Spotify theme applied"
+  else
+    warn "spicetify failed. Open Spotify once, log in, then run: frame update spicetify"
+    info "Still broken after a Spotify update? Try: spicetify restore backup apply"
+    info "Spotify from the AUR may need write access: https://spicetify.app/docs/advanced-usage/installation#spotify-installed-from-aur"
+  fi
+}
+
+# jq in place: json_edit <file> [jq options…] <filter>
+json_edit() {
+  local file=$1 tmp
+  shift
+  tmp="$(mktemp)"
+  jq "$@" "$file" >"$tmp" && mv "$tmp" "$file"
+}
+
+# ── Vencord build with the ShellBridge plugin ────────────────
+# Vesktop ships its own Vencord, but user plugins need a self-built one. frame keeps a
+# clone in ~/.local/share/frameshell/vencord and rebuilds only when Vencord or the
+# plugin changed.
+
+vencord_plugin_hash() {
+  (cd "$REPO/vencord/plugins" && find shellBridge -type f -print0 | sort -z | xargs -0 sha1sum) | sha1sum | cut -c1-12
+}
+
+vencord_build() {
+  step "Vencord with ShellBridge"
+  if [[ -d $VENCORD_SRC/.git ]]; then
+    run git -C "$VENCORD_SRC" pull --ff-only --quiet || warn "Could not update Vencord, building the version that is there"
+  else
+    info "Getting Vencord (first time only)"
+    run mkdir -p "$(dirname "$VENCORD_SRC")"
+    run git clone --depth 1 --quiet https://github.com/Vendicated/Vencord.git "$VENCORD_SRC"
+  fi
+
+  local marker="$STATE_DIR/vencord-build" wanted=""
+  [[ -d $VENCORD_SRC/.git ]] && wanted="$(git -C "$VENCORD_SRC" rev-parse --short HEAD)-$(vencord_plugin_hash)"
+  if [[ -n $wanted && -d $VENCORD_SRC/dist && -f $marker && "$(cat "$marker")" == "$wanted" ]]; then
+    ok "Vencord build up to date"
+    return 0
+  fi
+
+  run rm -rf "$VENCORD_SRC/src/userplugins/shellBridge"
+  run mkdir -p "$VENCORD_SRC/src/userplugins"
+  run cp -r "$REPO/vencord/plugins/shellBridge" "$VENCORD_SRC/src/userplugins/shellBridge"
+  info "Building Vencord, this takes about a minute"
+  if run pnpm -C "$VENCORD_SRC" install --frozen-lockfile --silent && run pnpm -C "$VENCORD_SRC" build; then
+    if ((!DRY_RUN)); then
+      mkdir -p "$STATE_DIR"
+      echo "$wanted" >"$marker"
+    fi
+    ok "Vencord built with ShellBridge"
+  else
+    warn "Vencord build failed, Vesktop keeps its own Vencord (the theme still works)"
+    return 1
+  fi
+}
+
+# Builds Vencord with ShellBridge, points Vesktop at it and turns on theme and plugin.
+# Vesktop has to be closed while its settings are written, otherwise it writes its own
+# copy back on exit.
+post_vencord() {
+  local built=0
+  if command -v pnpm >/dev/null || ((DRY_RUN)); then
+    vencord_build && built=1
+  else
+    warn "pnpm not found, skipping the ShellBridge plugin (the theme still works)"
+  fi
+
+  local vesktop="$HOME/.config/vesktop/settings.json"
+  local vencord="$HOME/.config/vesktop/settings/settings.json"
+  if [[ ! -f $vencord ]]; then
+    info "Start Vesktop once, close it, then run: frame update vencord"
+    return 0
+  fi
+  if command -v pgrep >/dev/null && pgrep -fi vesktop >/dev/null; then
+    warn "Vesktop is running. Close it and run: frame update vencord"
+    return 0
+  fi
+  if ((DRY_RUN)); then
+    info "would enable the theme and ShellBridge in $vencord"
+    info "would set the Vencord location in $vesktop to $VENCORD_SRC/dist"
+    return 0
+  fi
+  if ! command -v jq >/dev/null; then
+    warn "jq not found, enable it by hand: Settings → Themes → Frameshell, Plugins → ShellBridge"
+    return 0
+  fi
+
+  json_edit "$vencord" '.enabledThemes = ((.enabledThemes // []) + ["frameshell.theme.css"] | unique)'
+  ok "Theme enabled"
+  if ((built)) || [[ -d $VENCORD_SRC/dist ]]; then
+    json_edit "$vencord" '.plugins.ShellBridge.enabled = true'
+    [[ -f $vesktop ]] || echo '{}' >"$vesktop"
+    # Vesktop's "Vencord location": the dist folder of the build
+    json_edit "$vesktop" --arg dir "$VENCORD_SRC/dist" '.vencordDir = $dir'
+    ok "ShellBridge enabled, Vesktop uses the frameshell Vencord build"
+    info "Start Vesktop to load it"
+  fi
+  return 0
+}
+
+# ini_set <file> <section> <key> <value>: sets one key in an INI file (KDE, qt6ct),
+# adds the section or key when missing and leaves everything else alone
+ini_set() {
+  local file=$1 section=$2 key=$3 value=$4 tmp
+  if ((DRY_RUN)); then
+    info "would set [$section] $key=$value in ${file/#"$HOME"/\~}"
+    return 0
+  fi
+  mkdir -p "$(dirname "$file")"
+  [[ -f $file ]] || : >"$file"
+  tmp="$(mktemp)"
+  # Blank lines are held back, so a new key lands before the gap to the next section
+  awk -v s="[$section]" -v k="$key" -v v="$value" '
+    function emit() { if (insec && !done) { print k "=" v; done = 1 } }
+    function flush() { while (blank > 0) { print ""; blank-- } }
+    /^[[:space:]]*$/ { blank++; next }
+    /^\[/ { emit(); flush(); insec = ($0 == s); if (insec) seen = 1; print; next }
+    insec && index($0, k "=") == 1 { flush(); if (!done) { print k "=" v; done = 1 }; next }
+    { flush(); print }
+    END { emit(); flush(); if (!seen) { if (NR) print ""; print s; print k "=" v } }
+  ' "$file" >"$tmp"
+  cat "$tmp" >"$file"
+  rm -f "$tmp"
+}
+
+# set_default_app <desktop file> <mime type...>
+set_default_app() {
+  local desktop=$1
+  shift
+  if ! command -v xdg-mime >/dev/null && ((!DRY_RUN)); then
+    warn "xdg-mime not found (xdg-utils), set the default app by hand"
+    return 1
+  fi
+  run xdg-mime default "$desktop" "$@"
+}
+
+post_zed() {
+  if ! command -v zeditor >/dev/null && ((!DRY_RUN)); then
+    warn "zeditor not found, is the zed package installed?"
+  fi
+  ok "AI features off, file tree on the left (Ctrl+B), Frameshell theme"
+  if confirm "Open text files with Zed?"; then
+    set_default_app dev.zed.Zed.desktop text/plain text/markdown application/json application/x-shellscript       && ok "Zed is the default for text files"
+  fi
+  info "Open a project with: zeditor ~/frameshell   (Super+Shift+E opens Zed)"
+}
+
+# Outside Plasma, Dolphin takes its colors from its own color scheme setting and the
+# rest of the Qt look (style, fonts, icons) from qt6ct
+post_dolphin() {
+  local qt="$HOME/.config/qt6ct/qt6ct.conf"
+  # QFont string as qt6ct writes it; qt6ct rewrites it in its own format when saved
+  local font='"JetBrains Mono,11,-1,5,400,0,0,0,0,0,0,0,0,0,0,1"'
+  ini_set "$qt" Appearance style Fusion
+  ini_set "$qt" Appearance custom_palette true
+  ini_set "$qt" Appearance color_scheme_path "$HOME/.config/qt6ct/colors/Frameshell.conf"
+  ini_set "$qt" Appearance icon_theme breeze-dark
+  ini_set "$qt" Fonts general "$font"
+  ini_set "$qt" Fonts fixed "$font"
+  ok "qt6ct: Fusion style, frameshell palette, JetBrains Mono, Breeze Dark icons"
+
+  # The id is the file name without .colors
+  ini_set "$HOME/.config/dolphinrc" UiSettings ColorScheme Frameshell
+  ini_set "$HOME/.config/kdeglobals" Icons Theme breeze-dark
+  ok "Dolphin uses the Frameshell color scheme"
+
+  # Builds the application menu KDE apps read; without it "Open with" stays empty
+  if command -v kbuildsycoca6 >/dev/null || ((DRY_RUN)); then
+    if run_quiet env XDG_MENU_PREFIX=arch- kbuildsycoca6 --noincremental; then
+      ok "Application list built for \"Open with\""
+    else
+      warn "kbuildsycoca6 failed; run it again after logging in: XDG_MENU_PREFIX=arch- kbuildsycoca6"
+    fi
+  fi
+
+  if confirm "Open folders with Dolphin?"; then
+    set_default_app org.kde.dolphin.desktop inode/directory       && ok "Dolphin is the default file manager"
+  fi
+  info "SFTP: type sftp://user@host into the address bar; Places → right click → Add Entry keeps it"
+  info "Log out and in once so Hyprland sets QT_QPA_PLATFORMTHEME for the new look"
+}
+
+# Zen's files go into its profile folder, which exists after the first start
+post_zen() {
+  local profile
+  profile="$(zen_profile)"
+  if [[ -z $profile ]]; then
+    info "Start Zen once and close it, then run: frame install zen"
+    return 0
+  fi
+  info "Profile: ${profile/#"$HOME"/\~}"
+  if command -v pgrep >/dev/null && pgrep -x zen-bin >/dev/null; then
+    info "Zen is running; restart it to load the theme"
+  fi
+  if confirm "Make Zen the default browser?"; then
+    if command -v xdg-settings >/dev/null || ((DRY_RUN)); then
+      run xdg-settings set default-web-browser zen.desktop
+      ok "Zen is the default browser"
+    else
+      warn "xdg-settings not found (xdg-utils)"
+    fi
+  fi
+  return 0
+}
+
+# Asks for the wallpaper backend once; later changes go through: frame wallpaper backend …
+post_wallpaper() {
+  local bin="$HOME/.local/bin/frame-wallpaper" state="$STATE_DIR/wallpaper.json" backend
+  if [[ -f $state ]] && command -v jq >/dev/null; then
+    backend="$(jq -r '.backend // "both"' "$state")"
+    ok "Wallpaper backend: $backend"
+  else
+    backend="$(choose "Which wallpapers should run?" \
+      "both|Wallpaper Engine scenes from the Steam Workshop, plus videos and images" \
+      "mpv|only your own videos and images (mpvpaper, swaybg)" \
+      "image|only still images, lowest power use")"
+  fi
+  if [[ $backend == both ]] && ! command -v linux-wallpaperengine >/dev/null; then
+    info "Wallpaper Engine scenes need linux-wallpaperengine (AUR) and Wallpaper Engine bought on Steam"
+    install_deps linux-wallpaperengine-git
+  fi
+  if ((DRY_RUN)); then
+    info "would run: frame-wallpaper backend $backend"
+  elif [[ -x $bin ]]; then
+    if "$bin" backend "$backend" >/dev/null; then
+      ok "Backend set to $backend"
+    else
+      warn "Could not set the backend, try again with: frame wallpaper backend $backend"
+    fi
+  else
+    warn "frame-wallpaper is not linked yet, run: frame install wallpaper"
+  fi
+  info "Super+W opens the wallpaper app; folders: ~/Pictures/wallpapers and assets/wallpapers"
+  info "Change the backend later with: frame wallpaper backend both|mpv|image"
+}
+
+# ── Notification daemons ─────────────────────────────────────
+# Only one program can own the notification service on D-Bus. mako, dunst or
+# swaync would take the notifications away from the shell.
+
+notification_conflicts() {
+  local d
+  for d in mako dunst swaync; do
+    if { command -v pgrep >/dev/null && pgrep -x "$d" >/dev/null; } \
+      || systemctl --user is-enabled "$d.service" >/dev/null 2>&1 \
+      || grep -qsE "^[[:space:]]*exec(-once)?[[:space:]]*=.*\b$d\b" "$HOME"/.config/hypr/*.conf; then
+      echo "$d"
+    fi
+  done
+  return 0
+}
+
+# Stops them, disables their user services and comments out their exec-once lines
+disable_notification_daemons() {
+  local d f files=()
+  for f in "$HOME"/.config/hypr/*.conf; do
+    [[ -f $f && ! -L $f ]] && files+=("${f#"$HOME"/}")
+  done
+  snapshot_files notification-daemons "${files[@]}"
+  for d in "$@"; do
+    if systemctl --user is-enabled "$d.service" >/dev/null 2>&1; then
+      run systemctl --user disable --now "$d.service" || true
+    fi
+    if command -v pkill >/dev/null; then
+      run pkill -x "$d" || true
+    fi
+    for f in "${files[@]}"; do
+      run sed -i -E "s|^([[:space:]]*exec(-once)?[[:space:]]*=.*\\b$d\\b.*)|# frame: \\1|" "$HOME/$f"
+    done
+  done
+  ok "Turned off: $* (frame restore brings them back)"
+}
+
+post_quickshell() {
+  local found=()
+  mapfile -t found < <(notification_conflicts)
+  if ((${#found[@]})); then
+    warn "Other notification daemons found: ${found[*]}"
+    info "Only one program can show notifications; for the shell's popups they have to go"
+    if confirm "Turn them off?"; then
+      disable_notification_daemons "${found[@]}"
+    else
+      info "Left them on; notifications go to ${found[0]} instead of the shell"
+    fi
+  fi
+  info "Quickshell reloads on its own. Test the lockscreen with: qs ipc call lock lock"
+  if command -v pgrep >/dev/null && ! pgrep -x qs >/dev/null && ! pgrep -x quickshell >/dev/null; then
+    info "Quickshell is not running yet; start it with: qs -d (or log in again)"
+  fi
+  return 0
+}
+
+# Hooks frame/shell.conf into the user's own hyprland.conf instead of owning it
+post_hypr() {
+  local conf="$HOME/.config/hypr/hyprland.conf"
+  local line="source = ~/.config/hypr/frame/shell.conf"
+  if [[ ! -f $conf ]]; then
+    warn "No ~/.config/hypr/hyprland.conf found. Add this line to your Hyprland config:"
+    info "$line"
+    return 0
+  fi
+  if grep -qF "$line" "$conf"; then
+    ok "hyprland.conf already sources frame/shell.conf"
+  else
+    snapshot_files hyprland-conf ".config/hypr/hyprland.conf"
+    if ((DRY_RUN)); then
+      info "would append to $conf: $line"
+    else
+      printf '\n# frameshell: Quickshell keybinds, idle, autostart and window colors\n%s\n' "$line" >>"$conf"
+      ok "Added to hyprland.conf: $line"
+    fi
+  fi
+  # Binds frame adds (shell.conf, apps.conf) that the user's config may already have;
+  # a doubled bind runs both commands
+  local key dupes=()
+  for key in L SPACE C W E B; do
+    grep -qiE "^[[:space:]]*bind[a-z]*[[:space:]]*=[[:space:]]*(\\\$mainMod|SUPER)[[:space:]]*,[[:space:]]*$key[[:space:]]*," "$conf" \
+      && dupes+=("SUPER+$key")
+  done
+  if ((${#dupes[@]})); then
+    warn "hyprland.conf also binds ${dupes[*]}; frame binds them too, remove your lines to avoid doubles"
+  fi
+  if grep -qE '^[[:space:]]*exec-once[[:space:]]*=.*\bhypridle\b' "$conf"; then
+    warn "hyprland.conf starts hypridle too; remove that line, frame/shell.conf starts it"
+  fi
+  if command -v hyprctl >/dev/null && ((!DRY_RUN)); then
+    hyprctl reload >/dev/null && ok "Hyprland reloaded"
+  fi
+  return 0
+}
+
+# ── GRUB ─────────────────────────────────────────────────────
+# GRUB reads its theme from /boot before /home exists, so the theme is
+# copied there instead of linked.
+
+need_grub() {
+  [[ -f /boot/grub/grub.cfg ]] && command -v grub-mkconfig >/dev/null \
+    || die "This system does not boot with GRUB (no /boot/grub/grub.cfg)."
+}
+
+# Path of a JetBrains Mono TTF in the given style (Regular, Bold)
+grub_font_src() {
+  local style=$1 f
+  for f in /usr/share/fonts/TTF/JetBrainsMono-"$style".ttf \
+           /usr/share/fonts/truetype/jetbrains-mono/JetBrainsMono-"$style".ttf; do
+    [[ -f $f ]] && { echo "$f"; return 0; }
+  done
+  f=$(fc-match -f '%{file}' "JetBrains Mono:style=$style" 2>/dev/null || true)
+  [[ $f == *JetBrains* ]] && echo "$f"
+  return 0
+}
+
+grub_apply() {
+  step "Fonts"
+  local tmp regular bold
+  tmp="$(mktemp -d)"
+  regular=$(grub_font_src Regular)
+  bold=$(grub_font_src Bold)
+  if [[ -z $regular || -z $bold ]] && ((!DRY_RUN)); then
+    die "JetBrains Mono not found (install ttf-jetbrains-mono)"
+  fi
+  # Names must match theme.txt: "Frame Mono Regular 16" etc.
+  run grub-mkfont -n "Frame Mono" -s 14 -o "$tmp/frame-regular-14.pf2" "$regular"
+  run grub-mkfont -n "Frame Mono" -s 16 -o "$tmp/frame-regular-16.pf2" "$regular"
+  run grub-mkfont -n "Frame Mono" -s 16 -o "$tmp/frame-bold-16.pf2" "$bold"
+  ok "Fonts built"
+
+  step "Theme files"
+  # theme.txt comes from the theme templates; the frame pieces are drawn here
+  local theme line_color select_color f
+  theme=$(current_theme)
+  line_color=$(theme_hex "$theme" surface2)
+  select_color=$(theme_hex "$theme" primary)
+  [[ -f $REPO/grub/frameshell/theme.txt ]] || theme_render "$theme" 0 quiet
+  for f in border select_c select_e select_n select_ne select_s select_se; do
+    png_solid "$tmp/$f.png" 1 "$line_color"
+  done
+  # The left edge of the selected entry is a 3px bar in the primary color
+  for f in select_nw select_w select_sw; do
+    png_solid "$tmp/$f.png" 3 "$select_color"
+  done
+  run sudo install -d "$GRUB_THEME_DIR"
+  run sudo cp "$REPO/grub/frameshell/theme.txt" "$tmp"/*.png "$tmp"/*.pf2 "$GRUB_THEME_DIR/"
+  rm -rf "$tmp"
+  ok "Copied to $GRUB_THEME_DIR"
+
+  step "GRUB config"
+  if [[ ! -f $STATE_DIR/grub-default.orig ]]; then
+    run mkdir -p "$STATE_DIR"
+    run cp "$GRUB_DEFAULT_FILE" "$STATE_DIR/grub-default.orig"
+    ok "Original saved to $STATE_DIR/grub-default.orig"
+  fi
+  local line="GRUB_THEME=\"$GRUB_THEME_DIR/theme.txt\""
+  if grep -qE '^#?GRUB_THEME=' "$GRUB_DEFAULT_FILE"; then
+    run sudo sed -i -E "s|^#?GRUB_THEME=.*|$line|" "$GRUB_DEFAULT_FILE"
+  else
+    run sudo sed -i "\$a $line" "$GRUB_DEFAULT_FILE"
+  fi
+  ok "Set $line"
+  # A theme needs the graphical terminal
+  if grep -qE '^GRUB_TERMINAL_OUTPUT=.*console' "$GRUB_DEFAULT_FILE"; then
+    run sudo sed -i -E 's|^(GRUB_TERMINAL_OUTPUT=.*console.*)|#\1|' "$GRUB_DEFAULT_FILE"
+    warn "Commented out GRUB_TERMINAL_OUTPUT=console"
+  fi
+
+  step "grub.cfg"
+  run sudo grub-mkconfig -o /boot/grub/grub.cfg
+  ok "Rebuilt /boot/grub/grub.cfg"
+}
+
+cmd_grub() {
+  local action=${1:-install}
+  need_arch
+  need_grub
+  header
+  case $action in
+    install)
+      info "Copies the frameshell theme ($(current_theme)) to $GRUB_THEME_DIR and sets GRUB_THEME (needs sudo)"
+      confirm "Install the GRUB theme?" || exit 0
+      step "Dependencies"
+      install_deps ttf-jetbrains-mono
+      grub_apply
+      printf '\n%sDone.%s Reboot to see the new boot menu.\n\n' "$c_ok" "$c_reset"
+      ;;
+    remove)
+      confirm "Remove the frameshell GRUB theme?" || exit 0
+      step "GRUB config"
+      # Only comment out our line; restoring the old file would drop later edits
+      run sudo sed -i -E "s|^GRUB_THEME=\"$GRUB_THEME_DIR/theme.txt\"|#&|" "$GRUB_DEFAULT_FILE"
+      ok "Commented out GRUB_THEME"
+      step "Theme files"
+      run sudo rm -rf "$GRUB_THEME_DIR"
+      ok "Removed $GRUB_THEME_DIR"
+      step "grub.cfg"
+      run sudo grub-mkconfig -o /boot/grub/grub.cfg
+      ok "Rebuilt /boot/grub/grub.cfg"
+      [[ -f $STATE_DIR/grub-default.orig ]] && info "Your original /etc/default/grub is kept at $STATE_DIR/grub-default.orig"
+      return 0
+      ;;
+    *) die "Unknown grub action: $action (install or remove)" ;;
+  esac
+}
+
+# ── Theme ────────────────────────────────────────────────────
+# themes/<name>.json holds a theme: the same color roles for all of them, the 16
+# terminal colors and the fonts. themes/templates/<package>/<path> are the app files
+# with placeholders like {{colors.primary}}, {{ansi.4}} or {{colors.bg|lighten:8|rgb}}.
+# frame theme fills them in and writes <package>/<path>. Those outputs are git-ignored,
+# so switching themes never shows up as a change in the repo; install and update
+# write them before linking.
+
+TEMPLATE_DIR="$REPO/themes/templates"
+declare -A PALETTE=()
+
+# Theme names, from the files in themes/
+theme_ids() {
+  find "$REPO/themes" -maxdepth 1 -name '*.json' -printf '%f\n' | sed 's/\.json$//' | sort
+}
+
+is_theme() {
+  [[ -n $1 && -f $REPO/themes/$1.json ]]
+}
+
+# "name|description" lines for choose(), the default theme first
+theme_choices() {
+  local id desc
+  for id in "$DEFAULT_THEME" $(theme_ids | grep -vx "$DEFAULT_THEME"); do
+    desc=$(sed -n 's/.*"description": *"\([^"]*\)".*/\1/p' "$REPO/themes/$id.json" | head -n 1)
+    echo "$id|$desc"
+  done
+}
+
+save_theme() {
+  if ((DRY_RUN)); then
+    info "would remember theme $1 in $THEME_STATE"
+    return 0
+  fi
+  mkdir -p "$STATE_DIR"
+  echo "$1" >"$THEME_STATE"
+}
+
+# Flattens themes/<name>.json into PALETTE: colors.primary, ansi.4, fonts.mono, name, …
+load_palette() {
+  local id=$1 key value
+  PALETTE=()
+  while IFS='=' read -r key value; do
+    PALETTE[$key]=$value
+  done < <(jq -r 'paths(scalars) as $p | "\($p | map(tostring) | join("."))=\(getpath($p))"' "$REPO/themes/$id.json")
+  [[ -n ${PALETTE[colors.primary]:-} ]] || die "themes/$id.json has no colors.primary"
+  PALETTE[id]=$id
+}
+
+# mix_hex <#a> <#b> <percent>: a with percent of b mixed in
+mix_hex() {
+  local a=${1#\#} b=${2#\#} p=$3 i x y out="#"
+  for i in 0 2 4; do
+    x=$((16#${a:i:2}))
+    y=$((16#${b:i:2}))
+    out+=$(printf '%02x' $(((x * (100 - p) + y * p + 50) / 100)))
+  done
+  printf '%s' "$out"
+}
+
+# One filter step. Color steps: lighten:N, darken:N (N percent of white or black mixed in),
+# mix:<key>:N (another palette color). Formats, last in a chain: bare (5d6fe8),
+# rgb (93,111,232), argb (#ff5d6fe8), alpha:XX (#5d6fe8XX, XX in hex).
+color_step() {
+  local v=$1 f=$2 h n
+  h=${v#\#}
+  [[ $v =~ ^#[0-9a-fA-F]{6}$ ]] || return 1
+  case $f in
+    bare) printf '%s' "$h" ;;
+    argb) printf '#ff%s' "$h" ;;
+    rgb) printf '%d,%d,%d' "$((16#${h:0:2}))" "$((16#${h:2:2}))" "$((16#${h:4:2}))" ;;
+    alpha:*)
+      [[ ${f#alpha:} =~ ^[0-9a-fA-F]{2}$ ]] || return 1
+      printf '%s%s' "$v" "${f#alpha:}" ;;
+    lighten:* | darken:*)
+      n=${f#*:}
+      [[ $n =~ ^[0-9]+$ ]] && ((n <= 100)) || return 1
+      if [[ $f == lighten:* ]]; then mix_hex "$v" "#ffffff" "$n"; else mix_hex "$v" "#000000" "$n"; fi ;;
+    mix:*)
+      local rest=${f#mix:} key
+      key=${rest%:*}
+      n=${rest##*:}
+      [[ -n ${PALETTE[$key]+set} && $n =~ ^[0-9]+$ ]] && ((n <= 100)) || return 1
+      mix_hex "$v" "${PALETTE[$key]}" "$n" ;;
+    *) return 1 ;;
+  esac
+}
+
+# apply_filters <value> <"|step|step">
+apply_filters() {
+  local value=$1 chain=$2 f
+  local IFS='|'
+  for f in $chain; do
+    f=${f// /}
+    [[ -z $f ]] && continue
+    value=$(color_step "$value" "$f") || return 1
+  done
+  printf '%s' "$value"
+}
+
+# Prints a template with every {{key}} or {{key|step|step}} filled in
+render_template() {
+  local file=$1 line out match key chain value
+  local re='\{\{ *([A-Za-z0-9_.]+) *((\| *[A-Za-z0-9:._]+ *)*)\}\}'
+  while IFS= read -r line || [[ -n $line ]]; do
+    out=""
+    while [[ $line =~ $re ]]; do
+      match=${BASH_REMATCH[0]} key=${BASH_REMATCH[1]} chain=${BASH_REMATCH[2]}
+      if [[ -z ${PALETTE[$key]+set} ]]; then
+        printf 'unknown key %s in %s\n' "$key" "${file#"$TEMPLATE_DIR"/}" >&2
+        return 1
+      fi
+      if ! value=$(apply_filters "${PALETTE[$key]}" "$chain"); then
+        printf 'bad filter "%s" on %s in %s\n' "$chain" "$key" "${file#"$TEMPLATE_DIR"/}" >&2
+        return 1
+      fi
+      out+="${line%%"$match"*}$value"
+      line=${line#*"$match"}
+    done
+    printf '%s\n' "$out$line"
+  done <"$file"
+}
+
+# Template paths relative to themes/templates, e.g. zed/.config/zed/themes/frameshell.json
+theme_templates() {
+  [[ -d $TEMPLATE_DIR ]] || return 0
+  (cd "$TEMPLATE_DIR" && find . -type f | sed 's|^\./||' | sort)
+}
+
+# theme_render <name> <check: 0|1> [quiet]: writes (or only compares) every output file
+theme_render() {
+  local id=$1 check=$2 quiet=${3:-}
+  if ! command -v jq >/dev/null; then
+    if ((DRY_RUN)); then
+      info "would write the $id color files (needs jq)"
+      return 0
+    fi
+    die "frame theme needs jq (pacman -S jq)"
+  fi
+  load_palette "$id"
+  [[ -n $quiet ]] || step "Theme ${PALETTE[name]} (themes/$id.json)"
+
+  local rel pkg tmp state mark color written=0 stale=0 total=0
+  tmp="$(mktemp)"
+  while IFS= read -r rel; do
+    total=$((total + 1))
+    pkg=${rel%%/*}
+    if ! render_template "$TEMPLATE_DIR/$rel" >"$tmp"; then
+      rm -f "$tmp"
+      die "Could not render themes/templates/$rel"
+    fi
+    if [[ -f $REPO/$rel ]] && cmp -s "$tmp" "$REPO/$rel"; then
+      state=unchanged color=$c_ok mark=✓
+    elif ((check)); then
+      state="out of date" color=$c_warn mark=! stale=$((stale + 1))
+    else
+      run mkdir -p "$(dirname "$REPO/$rel")"
+      run cp "$tmp" "$REPO/$rel"
+      state=written color=$c_warn mark=↻ written=$((written + 1))
+    fi
+    [[ -n $quiet ]] || printf '  %s%s%s %-11s %-50s %s%s%s\n' "$color" "$mark" "$c_reset" "$pkg" "${rel#*/}" "$c_muted" "$state" "$c_reset"
+    # Outputs must stay out of git, or every theme switch would be a change in the repo
+    if ((!check)) && [[ -d $REPO/.git ]] && command -v git >/dev/null \
+      && ! git -C "$REPO" check-ignore -q -- "$rel" 2>/dev/null; then
+      warn "$rel is not in .gitignore"
+    fi
+  done < <(theme_templates)
+  rm -f "$tmp"
+
+  if ((check)); then
+    if ((stale)); then
+      warn "$stale of $total files do not match themes/$id.json, run: frame theme"
+      exit 1
+    fi
+    info "All $total files match themes/$id.json"
+  elif [[ -n $quiet ]]; then
+    ok "Theme ${PALETTE[name]}: $total color files, $written rewritten"
+  else
+    info "$written of $total files rewritten"
+  fi
+}
+
+# What each app needs after its color files changed; only for linked packages
+theme_reload() {
+  step "Apps"
+  local p
+  for p in $(installed_packages); do
+    case $p in
+      quickshell) ok "Quickshell reloads on its own" ;;
+      hypr)
+        if command -v hyprctl >/dev/null && ((!DRY_RUN)); then
+          hyprctl reload >/dev/null 2>&1 && ok "Hyprland window colors reloaded"
+        fi
+        ;;
+      spicetify) post_spicetify ;;
+      ghostty) info "Ghostty: new windows use the theme, open ones reload with Ctrl+Shift+," ;;
+      fish) info "fish and Starship: new shells use the theme" ;;
+      vencord) info "Vesktop: reload with Ctrl+R if the colors did not change on their own" ;;
+      zed) ok "Zed reloads its theme on its own" ;;
+      dolphin) info "Dolphin: restart it for the new colors" ;;
+      zen) info "Zen: restart it for the new colors" ;;
+    esac
+  done
+  if [[ -d $GRUB_THEME_DIR ]]; then
+    info "Boot menu: run frame grub to give GRUB the new colors (needs sudo)"
+  fi
+  return 0
+}
+
+theme_list() {
+  header
+  step "Themes"
+  local id cur desc swatch r h
+  cur=$(current_theme)
+  for id in $(theme_ids); do
+    desc=$(sed -n 's/.*"description": *"\([^"]*\)".*/\1/p' "$REPO/themes/$id.json" | head -n 1)
+    swatch=""
+    if ((USE_COLOR)); then
+      for r in bg surface2 primary secondary accent text; do
+        h=$(theme_hex "$id" "$r")
+        [[ -n $h ]] && swatch+="$(bg_hex "$h")  "
+      done
+      swatch+="$c_reset "
+    fi
+    if [[ $id == "$cur" ]]; then
+      printf '  %s❯%s %s%-11s%s %s%s%s%s\n' "$c_primary" "$c_reset" "$c_bold" "$id" "$c_reset" "$swatch" "$c_muted" "$desc" "$c_reset"
+    else
+      printf '    %-11s %s%s%s%s\n' "$id" "$swatch" "$c_muted" "$desc" "$c_reset"
+    fi
+  done
+  info "Switch with: frame theme set <name>"
+}
+
+theme_set() {
+  local id=$1
+  is_theme "$id" || die "Unknown theme: $id (available: $(theme_ids | tr '\n' ' '))"
+  # Check before saving, so the saved theme never differs from the written files
+  command -v jq >/dev/null || ((DRY_RUN)) || die "frame theme needs jq (pacman -S jq)"
+  header
+  save_theme "$id"
+  theme_render "$id" 0
+  theme_reload
+  printf '\n%sDone.%s frameshell now uses %s.\n\n' "$c_ok" "$c_reset" "${PALETTE[name]:-$id}"
+}
+
+cmd_theme() {
+  local action=${1:-}
+  case $action in
+    "")
+      header
+      theme_render "$(current_theme)" 0
+      theme_reload
+      ;;
+    list | ls) theme_list ;;
+    set | use)
+      [[ -n ${2:-} ]] || die "Name a theme: frame theme set <name> (see: frame theme list)"
+      theme_set "$2"
+      ;;
+    check)
+      header
+      theme_render "$(current_theme)" 1
+      ;;
+    *)
+      # frame theme sakura works too
+      if is_theme "$action"; then
+        theme_set "$action"
+      else
+        die "Unknown theme action: $action (frame theme list | set <name> | check)"
+      fi
+      ;;
+  esac
+}
+
+# ── Small PNGs for GRUB ──────────────────────────────────────
+# GRUB draws the menu frame from 1px images. They only need one color each, so they
+# are written here directly (stored deflate block, no compression) instead of
+# depending on an image tool.
+
+CRC_TABLE=()
+crc_init() {
+  local n c k
+  ((${#CRC_TABLE[@]})) && return 0
+  for ((n = 0; n < 256; n++)); do
+    c=$n
+    for ((k = 0; k < 8; k++)); do
+      if ((c & 1)); then c=$((0xEDB88320 ^ (c >> 1))); else c=$((c >> 1)); fi
+    done
+    CRC_TABLE[n]=$c
+  done
+}
+
+# CRC-32 of hex-encoded bytes, as 8 hex digits
+crc32_hex() {
+  local hex=$1 c=0xFFFFFFFF i
+  crc_init
+  for ((i = 0; i < ${#hex}; i += 2)); do
+    c=$((CRC_TABLE[(c ^ 16#${hex:i:2}) & 0xFF] ^ (c >> 8)))
+  done
+  printf '%08x' $((c ^ 0xFFFFFFFF))
+}
+
+adler32_hex() {
+  local hex=$1 a=1 b=0 i
+  for ((i = 0; i < ${#hex}; i += 2)); do
+    a=$(((a + 16#${hex:i:2}) % 65521))
+    b=$(((b + a) % 65521))
+  done
+  printf '%04x%04x' "$b" "$a"
+}
+
+png_chunk() {
+  local type=$1 data=$2
+  printf '%08x%s%s%s' $((${#data} / 2)) "$type" "$data" "$(crc32_hex "$type$data")"
+}
+
+# png_solid <file> <width> <rrggbb>: one row of opaque pixels in one color
+png_solid() {
+  local file=$1 width=$2 color=$3 raw="00" i len zlib hex bytes=""
+  if ((DRY_RUN)); then
+    info "would draw ${file##*/} (${width}x1, #$color)"
+    return 0
+  fi
+  for ((i = 0; i < width; i++)); do raw+="${color}ff"; done
+  len=$((${#raw} / 2))
+  # zlib header, one final stored block (LEN and its complement, little endian), Adler-32
+  zlib="780101$(printf '%02x%02x%02x%02x' $((len & 255)) $((len >> 8)) $((~len & 255)) $(((~len >> 8) & 255)))$raw$(adler32_hex "$raw")"
+  hex="89504e470d0a1a0a"
+  hex+=$(png_chunk 49484452 "$(printf '%08x%08x' "$width" 1)0806000000")
+  hex+=$(png_chunk 49444154 "$zlib")
+  hex+=$(png_chunk 49454e44 "")
+  for ((i = 0; i < ${#hex}; i += 2)); do bytes+="\\x${hex:i:2}"; done
+  printf '%b' "$bytes" >"$file"
+}
+
+# ── Commands ─────────────────────────────────────────────────
+
+# Hands everything to the wallpaper helper: frame wallpaper backend mpv, … set <file>, …
+cmd_wallpaper() {
+  local bin="$HOME/.local/bin/frame-wallpaper"
+  [[ -x $bin ]] || bin="$REPO/wallpaper/.local/bin/frame-wallpaper"
+  exec "$bin" "$@"
+}
+
+cmd_install() {
+  need_arch
+  local pkgs=("$@") p
+  ((${#pkgs[@]})) || pkgs=("${PACKAGES[@]}")
+
+  header
+  info "Packages: ${pkgs[*]}"
+  ((DRY_RUN)) && info "Dry run, nothing will be changed"
+  confirm "Install and link these?" || exit 0
+
+  step "Dependencies"
+  mapfile -t deps < <(deps_of "${pkgs[@]}")
+  install_deps stow jq "${deps[@]}"
+
+  # The color files are generated, so they exist before anything is linked
+  step "Theme"
+  if [[ ! -f $THEME_STATE ]]; then
+    local picked choices=()
+    mapfile -t choices < <(theme_choices)
+    picked=$(choose "Which theme? (switch any time: frame theme set <name>)" "${choices[@]}")
+    save_theme "$picked"
+  fi
+  theme_render "$(current_theme)" 0 quiet
+
+  local backup
+  backup="$(new_backup_dir install)"
+  for p in "${pkgs[@]}"; do
+    step "$p"
+    link_pkg "$p" "$backup"
+    run_post "$p"
+  done
+
+  step "frame command"
+  link_self
+  [[ -d $backup ]] && info "Old configs were moved to $backup"
+  printf '\n%sDone.%s Open a new terminal to see the changes.\n\n' "$c_ok" "$c_reset"
+}
+
+cmd_update() {
+  need_arch
+  local requested=("$@") pkgs=("$@")
+  ((${#pkgs[@]})) || mapfile -t pkgs < <(installed_packages)
+  ((${#pkgs[@]})) || die "Nothing installed yet, run: frame install"
+
+  header
+  if ((!NO_PULL)); then
+    step "frameshell"
+    [[ -z $(git -C "$REPO" status --porcelain --untracked-files=no) ]] \
+      || die "The repo has local changes. Commit or stash them first (cd $REPO)."
+    local before after
+    before=$(git -C "$REPO" rev-parse HEAD)
+    run git -C "$REPO" pull --ff-only
+    after=$(git -C "$REPO" rev-parse HEAD)
+    if [[ $before == "$after" ]]; then
+      ok "Already up to date"
+    else
+      ok "Updated $(git -C "$REPO" rev-parse --short "$before") → $(git -C "$REPO" rev-parse --short "$after")"
+      # Continue with the freshly pulled version of this script
+      local flags=(--no-pull)
+      ((ASSUME_YES)) && flags+=(-y)
+      exec "$REPO/frame" update "${flags[@]}" "${requested[@]}"
+    fi
+  fi
+
+  step "Backup"
+  snapshot_pkgs update "${pkgs[@]}"
+
+  # Templates may have changed with the pull
+  step "Theme"
+  theme_render "$(current_theme)" 0 quiet
+
+  step "Dependencies"
+  mapfile -t deps < <(deps_of "${pkgs[@]}")
+  install_deps "${deps[@]}"
+
+  local p
+  for p in "${pkgs[@]}"; do
+    step "$p"
+    link_pkg "$p" "$LAST_BACKUP"
+    run_post "$p"
+  done
+
+  # A plain `frame update` also refreshes an installed GRUB theme
+  if ((${#requested[@]} == 0)) && [[ -d $GRUB_THEME_DIR ]] && command -v grub-mkconfig >/dev/null; then
+    grub_apply
+  fi
+  printf '\n%sDone.%s\n\n' "$c_ok" "$c_reset"
+}
+
+cmd_remove() {
+  (($#)) || die "Name the packages to remove, e.g.: frame remove spicetify"
+  command -v stow >/dev/null || ((DRY_RUN)) || die "stow is not installed"
+  local p
+  for p in "$@"; do
+    step "$p"
+    if [[ -z $(pkg_root "$p") ]]; then
+      info "Nothing linked"
+      continue
+    fi
+    stow_pkg -D "$p"
+    ok "Config unlinked"
+  done
+  info "Backups of your old configs: frame restore"
+}
+
+cmd_backup() {
+  local pkgs=("$@")
+  ((${#pkgs[@]})) || pkgs=("${PACKAGES[@]}")
+  header
+  step "Backup"
+  snapshot_pkgs manual "${pkgs[@]}"
+  [[ -n $LAST_BACKUP && -d $LAST_BACKUP ]] && info "$LAST_BACKUP"
+  return 0
+}
+
+cmd_restore() {
+  local name=${1:-} b
+  header
+
+  if [[ -z $name ]]; then
+    step "Backups"
+    local found=0 count
+    while IFS= read -r b; do
+      found=1
+      count=$(find "$BACKUP_ROOT/$b" -type f | wc -l)
+      printf '  %-34s %s%s files%s\n' "$b" "$c_muted" "${count// /}" "$c_reset"
+    done < <(list_backups)
+    if ((found)); then
+      info "Put one back with: frame restore <name>   (or: frame restore latest)"
+    else
+      info "No backups yet. Create one with: frame backup"
+    fi
+    return 0
+  fi
+
+  [[ $name == latest ]] && name=$(list_backups | head -n 1)
+  local src="$BACKUP_ROOT/$name"
+  [[ -n $name && -d $src ]] || die "No backup named ${1} (list them with: frame restore)"
+
+  local files=() f
+  while IFS= read -r f; do files+=("$f"); done < <(cd "$src" && find . -type f | sed 's|^\./||' | sort)
+  ((${#files[@]})) || die "Backup $name is empty"
+
+  step "Restore $name"
+  for f in "${files[@]}"; do info "~/$f"; done
+  confirm "Put these ${#files[@]} files back? The current state is backed up first." || exit 0
+
+  step "Safety backup"
+  snapshot_files before-restore "${files[@]}"
+
+  step "Restoring"
+  for f in "${files[@]}"; do
+    run mkdir -p "$HOME/$(dirname "$f")"
+    # Drop frame's symlink first so the copy does not land in the repo
+    [[ -L $HOME/$f ]] && run rm "$HOME/$f"
+    run cp "$src/$f" "$HOME/$f"
+  done
+  ok "Restored $name"
+  info "Restored files are plain copies. To link a package again: frame install <package>"
+}
+
+cmd_status() {
+  header
+  printf '  %s%-12s %-10s %s%s\n' "$c_muted" "PACKAGE" "CONFIG" "DEPENDENCIES" "$c_reset"
+  local p state d missing color
+  for p in "${PACKAGES[@]}"; do
+    state=$(link_state "$p")
+    missing=()
+    for d in ${DEPS[$p]}; do has_pkg "$d" || missing+=("$d"); done
+    case $state in
+      linked) color=$c_ok ;;
+      partial) color=$c_warn ;;
+      *) color=$c_muted ;;
+    esac
+    if ((${#missing[@]})); then
+      printf '  %-12s %s%-10s%s %smissing: %s%s\n' "$p" "$color" "$state" "$c_reset" "$c_danger" "${missing[*]}" "$c_reset"
+    else
+      printf '  %-12s %s%-10s%s %sok%s\n' "$p" "$color" "$state" "$c_reset" "$c_ok" "$c_reset"
+    fi
+  done
+
+  step "Checks"
+  ok "Theme $(current_theme) (frame theme list)"
+  command -v pacman >/dev/null || warn "pacman not found, dependency checks are skipped"
+  command -v stow >/dev/null && ok "stow installed" || warn "stow missing (frame install takes care of it)"
+
+  if command -v fc-list >/dev/null; then
+    fc-list | grep -qiE "jetbrains ?mono" && ok "Font JetBrains Mono installed" \
+      || warn "Font JetBrains Mono missing, Spotify, Vesktop and GRUB need it (pacman -S ttf-jetbrains-mono)"
+  fi
+
+  [[ -f $REPO/assets/logo.png ]] && ok "fastfetch logo found" \
+    || warn "No fastfetch logo at assets/logo.png"
+
+  command -v spotify >/dev/null || command -v spotify-launcher >/dev/null \
+    || warn "Spotify not found, the spicetify theme needs it"
+
+  if grep -qs fastfetch /usr/share/cachyos-fish-config/cachyos-config.fish; then
+    warn "CachyOS's fish config runs fastfetch too, you may see it twice"
+    info "Fix: remove the cachyos-config line in ~/.config/fish/config.fish, or keep theirs and drop fish_greeting in conf.d/frameshell.fish"
+  fi
+
+  [[ :$PATH: == *":$HOME/.local/bin:"* ]] || warn "~/.local/bin is not in PATH, the frame command will not be found"
+
+  if [[ -f /boot/grub/grub.cfg ]]; then
+    [[ -d $GRUB_THEME_DIR ]] && ok "GRUB theme installed" || info "GRUB theme not installed (frame grub)"
+  fi
+
+  local conflicts
+  conflicts=$(notification_conflicts | tr '\n' ' ')
+  if [[ -n ${conflicts// /} ]]; then
+    warn "Other notification daemons active: ${conflicts}(frame install quickshell turns them off)"
+  fi
+
+  if [[ -d $VENCORD_SRC/dist ]]; then
+    ok "Vencord build with ShellBridge ($(cat "$STATE_DIR/vencord-build" 2>/dev/null || echo "unknown version"))"
+  fi
+
+  local backups
+  backups=$(list_backups | wc -l)
+  info "${backups// /} backups in $BACKUP_ROOT (frame restore)"
+  echo
+}
+
+# ── Main ─────────────────────────────────────────────────────
+
+main() {
+  local cmd=help args=() a
+  if (($#)); then cmd=$1; shift; fi
+  while (($#)); do
+    case $1 in
+      -n | --dry-run) DRY_RUN=1 ;;
+      -y | --yes) ASSUME_YES=1 ;;
+      --no-pull) NO_PULL=1 ;;
+      -h | --help) cmd=help ;;
+      -*) die "Unknown option: $1" ;;
+      *) args+=("$1") ;;
+    esac
+    shift
+  done
+
+  case $cmd in
+    install | i | update | up | remove | rm | uninstall | backup)
+      for a in "${args[@]}"; do
+        is_package "$a" || die "Unknown package: $a (available: ${PACKAGES[*]})"
+      done
+      ;;
+  esac
+
+  case $cmd in
+    install | i) cmd_install "${args[@]}" ;;
+    update | up) cmd_update "${args[@]}" ;;
+    remove | rm | uninstall) cmd_remove "${args[@]}" ;;
+    backup) cmd_backup "${args[@]}" ;;
+    restore) cmd_restore "${args[@]}" ;;
+    grub) cmd_grub "${args[@]}" ;;
+    theme) cmd_theme "${args[@]}" ;;
+    wallpaper | wp) cmd_wallpaper "${args[@]}" ;;
+    status | st | doctor) cmd_status ;;
+    help) usage ;;
+    *) die "Unknown command: $cmd (try: frame help)" ;;
+  esac
+}
+
+# Kept on one line: update may replace this file while it runs
+main "$@"; exit $?

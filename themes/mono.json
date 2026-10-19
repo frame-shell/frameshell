@@ -1,0 +1,43 @@
+{
+  "name": "Mono",
+  "description": "black and white",
+  "colors": {
+    "bg": "#0a0a0a",
+    "surface": "#141414",
+    "surface2": "#262626",
+    "shadow": "#4d4d4d",
+    "primary": "#ededed",
+    "secondary": "#a8a8a8",
+    "accent": "#cfcfcf",
+    "text": "#f5f5f5",
+    "textDim": "#c4c4c4",
+    "muted": "#858585",
+    "frame": "#555555",
+    "danger": "#e08a8a",
+    "warn": "#d9c48f",
+    "ok": "#9fc9a8"
+  },
+  "ansi": [
+    "#1a1a1a",
+    "#d98c8c",
+    "#9fc4a6",
+    "#d4c08e",
+    "#b4b4b4",
+    "#c9c9c9",
+    "#a6a6a6",
+    "#c4c4c4",
+    "#555555",
+    "#e8a8a8",
+    "#b8d9be",
+    "#e6d6a8",
+    "#d0d0d0",
+    "#e0e0e0",
+    "#c2c2c2",
+    "#f5f5f5"
+  ],
+  "fonts": {
+    "ui": "JetBrains Mono",
+    "mono": "JetBrains Mono",
+    "icons": "JetBrainsMono Nerd Font"
+  }
+}

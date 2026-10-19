@@ -1,12 +1,12 @@
-// Zed settings from roxy-dots: Periwinkle theme, JetBrains Mono, file tree on the left,
-// no AI features. This file is a link into ~/roxy-dots/zed, so changes made here or in
+// Zed settings from frameshell: Frameshell theme (colors from frame theme), JetBrains Mono, file tree on the left,
+// no AI features. This file is a link into ~/frameshell/zed, so changes made here or in
 // Zed's settings UI end up in the repo.
 {
   // Switches off the agent panel, inline assistant and edit predictions
   "disable_ai": true,
   "agent": { "enabled": false, "button": false },
 
-  "theme": { "mode": "dark", "dark": "Periwinkle", "light": "Periwinkle" },
+  "theme": { "mode": "dark", "dark": "Frameshell", "light": "Frameshell" },
   "ui_font_family": "JetBrains Mono",
   "ui_font_size": 15,
   "buffer_font_family": "JetBrains Mono",

@@ -1,5 +1,5 @@
 /*
- * ShellBridge – Vencord user plugin for roxy-dots
+ * ShellBridge – Vencord user plugin for frameshell
  *
  * Sends Discord events to the Quickshell shell over a Unix socket and runs the actions
  * the shell sends back. Protocol: see quickshell/.config/quickshell/services/DiscordBridge.qml.

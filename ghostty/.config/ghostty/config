@@ -1,6 +1,6 @@
-# Ghostty – Roxy
+# Ghostty – frameshell (colors: themes/frameshell, written by frame theme)
 
-theme = roxy
+theme = frameshell
 
 font-family = JetBrains Mono
 font-size = 12

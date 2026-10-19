@@ -1,1 +1,18 @@
+# Your own pictures (fastfetch logo, wallpapers); not part of the repo
 assets/
+
+# Written by `frame theme` from themes/templates for the active theme; edit the
+# template instead. Kept out of git so switching themes is never a change in the repo.
+/quickshell/.config/quickshell/config/Theme.qml
+/ghostty/.config/ghostty/themes/frameshell
+/fish/.config/fish/conf.d/frameshell-colors.fish
+/starship/.config/starship.toml
+/spicetify/.config/spicetify/Themes/Frameshell/color.ini
+/vencord/.config/vesktop/themes/frameshell.theme.css
+/hypr/.config/hypr/frame/colors.conf
+/zed/.config/zed/themes/frameshell.json
+/dolphin/.config/qt6ct/colors/Frameshell.conf
+/dolphin/.local/share/color-schemes/Frameshell.colors
+/zen/chrome/userChrome.css
+/zen/user.js
+/grub/
