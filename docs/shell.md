@@ -134,6 +134,10 @@ GoXLR notes: levels and mutes come from the goxlr-utility HTTP API
 description; if yours are named differently (`wpctl status`), change `goxlrOutputs` and
 `goxlrInputs` in `config/Config.qml`.
 
+On a GoXLR Mini the System channel has no fader: the control center shows a slider for it,
+and the volume in the bar is that channel; scrolling on it changes it in steps of 5 %
+(without a GoXLR: the default output). The OSD shows the change like a fader move.
+
 ## OSD
 
 A small frame at the bottom center, gone after 1.6 s and never on the lockscreen. It only
