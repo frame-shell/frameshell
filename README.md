@@ -28,6 +28,7 @@ Dark blue-violet, TUI look, custom shell, everything built by hand.
 
 - [ ] Top bar with control center (PC stats, toggles, GoXLR faders) and app mixer for per-app routing (built, untested)
 - [ ] Spotify popup on song change (MPRIS), fading in at the top left, with playback controls (built, untested)
+- [ ] Calendar under the clock on hover, with ISO weeks (built, untested)
 - [ ] Media hover card on the bar: cover, progress, play/pause; next/previous only when the player supports it (built, untested)
 - [ ] OSD module for GoXLR faders, mic mute, system volume and brightness
 - [ ] Custom notifications: TUI banners with actions and timer, bell with history, "silent" mode (built, untested)

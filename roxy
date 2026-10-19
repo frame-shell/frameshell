@@ -49,7 +49,8 @@ LAST_BACKUP=""
 
 # ── Output ───────────────────────────────────────────────────
 
-if [[ -t 1 ]]; then
+# Colors on a terminal; FORCE_COLOR keeps them in logs, NO_COLOR turns them off
+if [[ -n ${FORCE_COLOR:-} || ( -t 1 && -z ${NO_COLOR:-} ) ]]; then
   c_text=$'\e[38;2;225;228;255m'
   c_primary=$'\e[38;2;93;111;232m'
   c_secondary=$'\e[38;2;147;164;247m'
@@ -83,10 +84,22 @@ run() {
   "$@"
 }
 
+# Like run, but hides the command's own output
+run_quiet() {
+  if ((DRY_RUN)); then
+    run "$@"
+    return 0
+  fi
+  "$@" >/dev/null 2>&1
+}
+
 confirm() {
   ((ASSUME_YES)) && return 0
-  local answer
-  read -r -p "  $1 [Y/n] " answer
+  local answer=""
+  printf '  %s [Y/n] ' "$1"
+  read -r answer || true
+  # Typed answers are already on screen; piped ones are echoed so logs read right
+  [[ -t 0 ]] || printf '%s\n' "${answer:-y}"
   [[ -z $answer || $answer =~ ^[YyJj] ]]
 }
 
@@ -147,7 +160,11 @@ deps_of() {
 
 install_deps() {
   local missing=() p helper
-  for p in "$@"; do has_pkg "$p" || missing+=("$p"); done
+  # Several packages need the same fonts; ask for each package once
+  for p in "$@"; do
+    [[ " ${missing[*]} " == *" $p "* ]] && continue
+    has_pkg "$p" || missing+=("$p")
+  done
   if ((${#missing[@]} == 0)); then
     ok "All dependencies already installed"
     return 0
@@ -286,7 +303,8 @@ post_spicetify() {
   run spicetify config current_theme Roxy color_scheme Roxy
 
   # apply fails on a fresh install or after a Spotify update; a new backup fixes both
-  if run spicetify apply || run spicetify backup apply; then
+  # The quiet first try avoids spicetify's "you haven't backed up" error on a fresh install
+  if run_quiet spicetify apply || run spicetify backup apply; then
     ok "Spotify theme applied"
   else
     warn "spicetify failed. Open Spotify once, log in, then run: roxy update spicetify"

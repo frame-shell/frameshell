@@ -1,6 +1,9 @@
 # Periwinkle – fish syntax colors and Starship prompt
 # Lives in conf.d so CachyOS's own config.fish stays untouched.
 
+# The roxy command lives in ~/.local/bin (no-op when it is already in PATH)
+fish_add_path --global --path ~/.local/bin
+
 status is-interactive; or return
 
 set -g fish_color_normal e1e4ff
