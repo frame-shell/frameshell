@@ -52,7 +52,7 @@ declare -A EXTRAS=(
   [fish]=".config/fish/config.fish"
   [spicetify]=".config/spicetify/config-xpui.ini"
   [vencord]=".config/vesktop/settings/settings.json"
-  [hypr]=".config/hypr/hyprland.conf"
+  [hypr]=".config/hypr/hyprland.lua .config/hypr/hyprland.conf"
   [wallpaper]=".local/state/frameshell/wallpaper.json"
   [dolphin]=".config/dolphinrc .config/qt6ct/qt6ct.conf .config/kdeglobals"
 )
@@ -672,17 +672,19 @@ notification_conflicts() {
   for d in mako dunst swaync; do
     if { command -v pgrep >/dev/null && pgrep -x "$d" >/dev/null; } \
       || systemctl --user is-enabled "$d.service" >/dev/null 2>&1 \
-      || grep -qsE "^[[:space:]]*exec(-once)?[[:space:]]*=.*\b$d\b" "$HOME"/.config/hypr/*.conf; then
+      || grep -qsE "^[[:space:]]*exec(-once)?[[:space:]]*=.*\b$d\b" "$HOME"/.config/hypr/*.conf \
+      || grep -qsE "exec_cmd\([^)]*\b$d\b" "$HOME"/.config/hypr/*.lua; then
       echo "$d"
     fi
   done
   return 0
 }
 
-# Stops them, disables their user services and comments out their exec-once lines
+# Stops them, disables their user services and comments out their autostart lines
+# (exec-once in hyprland.conf, hl.exec_cmd in hyprland.lua)
 disable_notification_daemons() {
   local d f files=()
-  for f in "$HOME"/.config/hypr/*.conf; do
+  for f in "$HOME"/.config/hypr/*.conf "$HOME"/.config/hypr/*.lua; do
     [[ -f $f && ! -L $f ]] && files+=("${f#"$HOME"/}")
   done
   snapshot_files notification-daemons "${files[@]}"
@@ -694,7 +696,11 @@ disable_notification_daemons() {
       run pkill -x "$d" || true
     fi
     for f in "${files[@]}"; do
-      run sed -i -E "s|^([[:space:]]*exec(-once)?[[:space:]]*=.*\\b$d\\b.*)|# frame: \\1|" "$HOME/$f"
+      if [[ $f == *.lua ]]; then
+        run sed -i -E "s|^([[:space:]]*hl\\.exec_cmd\\(.*\\b$d\\b.*)|-- frame: \\1|" "$HOME/$f"
+      else
+        run sed -i -E "s|^([[:space:]]*exec(-once)?[[:space:]]*=.*\\b$d\\b.*)|# frame: \\1|" "$HOME/$f"
+      fi
     done
   done
   ok "Turned off: $* (frame restore brings them back)"
@@ -719,38 +725,45 @@ post_quickshell() {
   return 0
 }
 
-# Hooks frame/shell.conf into the user's own hyprland.conf instead of owning it
+# Hooks frame/shell.lua into the user's own hyprland.lua instead of owning it.
+# Hyprland 0.55+ reads hyprland.lua first; hyprland.conf (hyprlang) is being dropped.
 post_hypr() {
-  local conf="$HOME/.config/hypr/hyprland.conf"
-  local line="source = ~/.config/hypr/frame/shell.conf"
-  if [[ ! -f $conf ]]; then
-    warn "No ~/.config/hypr/hyprland.conf found. Add this line to your Hyprland config:"
-    info "$line"
+  local lua="$HOME/.config/hypr/hyprland.lua" conf="$HOME/.config/hypr/hyprland.conf"
+  local line='require("frame/shell")'
+  if [[ ! -f $lua ]]; then
+    if [[ -f $conf ]]; then
+      warn "Your Hyprland config is hyprland.conf, the old format; frameshell's Hyprland files are Lua"
+      info "Hyprland 0.55+ reads hyprland.lua instead and drops hyprland.conf soon. Move your settings to"
+      info "hyprland.lua (Hyprland's example: https://github.com/hyprwm/Hyprland/blob/main/example/hyprland.lua),"
+      info "then run: frame install hypr"
+    else
+      warn "No ~/.config/hypr/hyprland.lua found. Add this line to your Hyprland config:"
+      info "$line"
+    fi
     return 0
   fi
-  if grep -qF "$line" "$conf"; then
-    ok "hyprland.conf already sources frame/shell.conf"
+  if grep -qF "$line" "$lua"; then
+    ok "hyprland.lua already loads frame/shell"
   else
-    snapshot_files hyprland-conf ".config/hypr/hyprland.conf"
+    snapshot_files hyprland-lua ".config/hypr/hyprland.lua"
     if ((DRY_RUN)); then
-      info "would append to $conf: $line"
+      info "would append to $lua: $line"
     else
-      printf '\n# frameshell: Quickshell keybinds, idle, autostart and window colors\n%s\n' "$line" >>"$conf"
-      ok "Added to hyprland.conf: $line"
+      printf '\n-- frameshell: Quickshell, keybinds, idle, hotkey overlay and window colors\n%s\n' "$line" >>"$lua"
+      ok "Added to hyprland.lua: $line"
     fi
   fi
-  # Binds frame adds (shell.conf, apps.conf) that the user's config may already have;
-  # a doubled bind runs both commands
+  # Binds frame adds (frame/shell.lua, frame/apps.lua) that the user's config may already
+  # have, as hl.bind("SUPER + L", …) or hl.bind(mainMod .. " + L", …); a doubled bind runs both
   local key dupes=()
   for key in L SPACE C W E B; do
-    grep -qiE "^[[:space:]]*bind[a-z]*[[:space:]]*=[[:space:]]*(\\\$mainMod|SUPER)[[:space:]]*,[[:space:]]*$key[[:space:]]*," "$conf" \
-      && dupes+=("SUPER+$key")
+    grep -qiE "hl\.bind\([^,]*(SUPER|mainMod)[^,]*\+ *$key\"" "$lua" && dupes+=("SUPER+$key")
   done
   if ((${#dupes[@]})); then
-    warn "hyprland.conf also binds ${dupes[*]}; frame binds them too, remove your lines to avoid doubles"
+    warn "hyprland.lua also binds ${dupes[*]}; frame binds them too, remove your lines to avoid doubles"
   fi
-  if grep -qE '^[[:space:]]*exec-once[[:space:]]*=.*\bhypridle\b' "$conf"; then
-    warn "hyprland.conf starts hypridle too; remove that line, frame/shell.conf starts it"
+  if grep -qE 'exec_cmd\("hypridle' "$lua"; then
+    warn "hyprland.lua starts hypridle too; remove that line, frame/shell.lua starts it"
   fi
   if command -v hyprctl >/dev/null && ((!DRY_RUN)); then
     hyprctl reload >/dev/null && ok "Hyprland reloaded"

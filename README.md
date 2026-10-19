@@ -38,6 +38,7 @@ git clone https://github.com/vxnsin/frameshell ~/frameshell
 | Super+W | wallpapers |
 | Super+L | lock |
 | Super+E, Super+B, Super+Shift+E | Dolphin, Zen, Zed |
+| hold Super | all hotkeys on a keyboard map |
 
 ```bash
 frame theme set sakura   # periwinkle, sakura, matcha, ember, lagoon, mono

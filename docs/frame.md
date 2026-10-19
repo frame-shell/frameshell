@@ -49,11 +49,15 @@ Manual steps:
   switched on automatically (otherwise: Settings → Themes → Frameshell).
 - **Font:** JetBrains Mono everywhere (TUI look); `frame` installs `ttf-jetbrains-mono`
   and the Nerd Font build for icons.
-- **Hyprland:** `frame install hypr` adds `source = ~/.config/hypr/frame/shell.conf` to your
-  own `hyprland.conf` (backed up first). Remove older SUPER+L, SUPER+SPACE, SUPER+C,
-  SUPER+W, SUPER+E or SUPER+B binds or a second `exec-once = hypridle` if your config has
-  them. `frame/shell.conf` also sources `frame/colors.conf` (window borders in the theme
-  colors); drop that line to keep your own.
+- **Hyprland:** frameshell's Hyprland files are Lua (Hyprland 0.55+, which reads
+  `hyprland.lua` before the old `hyprland.conf`). `frame install hypr` adds
+  `require("frame/shell")` to your own `hyprland.lua` (backed up first). Still on
+  `hyprland.conf`? Move your settings to `hyprland.lua` first; Hyprland's
+  [example config](https://github.com/hyprwm/Hyprland/blob/main/example/hyprland.lua) is a
+  good start. Remove older SUPER+L, SUPER+SPACE, SUPER+C, SUPER+W, SUPER+E or SUPER+B
+  binds or a second `hl.exec_cmd("hypridle")` if your config has them. `frame/shell.lua`
+  also loads `frame/colors.lua` (window borders in the theme colors); drop that line to
+  keep your own.
 - **Weather:** set your city in `quickshell/.config/quickshell/config/Config.qml`
   (`weatherLocation`); empty means wttr.in guesses it from your IP.
 - **Zen:** start it once and close it, then `frame install zen`; its files go into the
@@ -71,7 +75,7 @@ Not covered by `frame` yet: Hyprland itself, `goxlr-utility`.
 frameshell/
 ├── frame              # CLI: install, update, remove, backup, restore, theme, grub, wallpaper, status
 ├── themes/            # periwinkle.json, sakura.json, … and templates/ for frame theme
-├── hypr/              # frame/shell.conf (keybinds, autostart), frame/apps.conf, hypridle.conf
+├── hypr/              # frame/shell.lua (keybinds, autostart), apps.lua, hotkeys.lua, hypridle.conf
 ├── quickshell/.config/quickshell/
 │   ├── shell.qml      # Entry point
 │   ├── config/        # Theme.qml (generated), Config.qml (your settings)

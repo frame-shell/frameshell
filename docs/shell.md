@@ -1,7 +1,20 @@
 # The shell
 
 Everything here runs in Quickshell (`quickshell/.config/quickshell`). Keys are set in
-`hypr/.config/hypr/frame/shell.conf`.
+`hypr/.config/hypr/frame/shell.lua` and `apps.lua`.
+
+## Hotkeys
+
+Hold Super for three seconds and an overlay lists every Hyprland bind: a German QWERTZ
+keyboard with each key lit that does something with Super (a dot when only Super+Shift
+does), hovering a key says what it does, and below all binds grouped as shell, apps,
+windows, workspaces and media. Letting go of Super closes it. It stays closed while Super
+is busy with something else, like Super+Space or dragging a window
+(`hypr/.config/hypr/frame/hotkeys.lua`). `qs ipc call hotkeys toggle` opens it without
+holding anything.
+
+The list is read live from `hyprctl binds`. Give your own binds a description to name
+them, optionally with a group: `{ description = "media · next song" }`.
 
 ## Launcher
 

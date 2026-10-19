@@ -9,7 +9,7 @@ assets/
 /starship/.config/starship.toml
 /spicetify/.config/spicetify/Themes/Frameshell/color.ini
 /vencord/.config/vesktop/themes/frameshell.theme.css
-/hypr/.config/hypr/frame/colors.conf
+/hypr/.config/hypr/frame/colors.lua
 /zed/.config/zed/themes/frameshell.json
 /dolphin/.config/qt6ct/colors/Frameshell.conf
 /dolphin/.local/share/color-schemes/Frameshell.colors
