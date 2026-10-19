@@ -30,7 +30,7 @@ Dark blue-violet, TUI look, custom shell, everything built by hand.
 - [ ] Spotify popup on song change (MPRIS), fading in at the top left, with playback controls
 - [ ] OSD module for GoXLR faders, mic mute, system volume and brightness
 - [ ] Custom notifications
-- [ ] Custom launcher
+- [ ] Launcher: fuzzy app search, calculator, run and power modes (built, untested)
 - [ ] Lockscreen: blurred desktop snapshot, weather panel, media, fade animation (built, untested)
 - [ ] Wallpaper Engine as background
 - [ ] Infinite-canvas workflow
@@ -67,15 +67,15 @@ Additional themes can be added later as extra JSON files.
 
 ```
 roxy-dots/
-├── hypr/              # roxy/lock.conf (keybind, autostart) + hypridle.conf
+├── hypr/              # roxy/shell.conf (keybinds, autostart) + hypridle.conf
 ├── quickshell/.config/quickshell/
 │   ├── shell.qml      # Entry point
 │   ├── config/        # Theme.qml (palette, fonts, timings), Config.qml (your settings)
 │   ├── components/    # Frame.qml: the labeled TUI frame
-│   ├── services/      # Weather.qml (wttr.in)
+│   ├── services/      # Weather.qml (wttr.in), Apps.qml (desktop entries, search, usage)
 │   ├── lockscreen/    # Lock, LockContext (PAM), LockSurface (UI), pam/
 │   ├── bar/           # Top bar with control center (planned)
-│   ├── launcher/      # App launcher (planned)
+│   ├── launcher/      # Launcher (window, IPC), LauncherView (apps, calc, run, power)
 │   ├── osd/           # Overlays: GoXLR, mute, volume (planned)
 │   ├── media/         # Spotify popup, MPRIS (planned)
 │   └── notifications/ # Notification daemon (planned)
@@ -140,13 +140,27 @@ Manual steps:
   switched on automatically (otherwise: Settings → Themes → Roxy).
 - **Font:** JetBrains Mono everywhere (TUI look); `roxy` installs `ttf-jetbrains-mono`
   and the Nerd Font build for icons.
-- **Hyprland:** `roxy install hypr` adds `source = ~/.config/hypr/roxy/lock.conf` to your
-  own `hyprland.conf` (backed up first). Remove an older SUPER+L bind or a second
-  `exec-once = hypridle` if your config has one.
+- **Hyprland:** `roxy install hypr` adds `source = ~/.config/hypr/roxy/shell.conf` to your
+  own `hyprland.conf` (backed up first). Remove older SUPER+L or SUPER+SPACE binds or a
+  second `exec-once = hypridle` if your config has them.
 - **Weather:** set your city in `quickshell/.config/quickshell/config/Config.qml`
   (`weatherLocation`); empty means wttr.in guesses it from your IP.
 
 Not covered by `roxy` yet: Hyprland itself, `goxlr-utility`.
+
+## Launcher
+
+Super+Space (or `qs ipc call launcher toggle`) opens the launcher on the focused screen.
+
+| Type | Does |
+|---|---|
+| anything | fuzzy search over installed apps; often used apps rank higher |
+| `= 2*21` | calculator, Enter copies the result (`wl-copy`) |
+| `> btop` | runs the command in Ghostty, the window stays open |
+| `: reboot` | lock, logout, suspend, reboot, shutdown; all but lock need Enter twice |
+
+↑↓ selects, Tab cycles the modes, Esc or a click outside closes. Launch counts are kept
+in `launcher-usage.json` in Quickshell's state folder.
 
 ## Lockscreen
 

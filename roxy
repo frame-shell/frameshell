@@ -29,7 +29,7 @@ declare -A DEPS=(
   [fastfetch]="fastfetch chafa"
   [spicetify]="spicetify-cli ttf-jetbrains-mono"
   [vencord]="vesktop ttf-jetbrains-mono jq"
-  [quickshell]="quickshell ttf-jetbrains-mono ttf-jetbrains-mono-nerd"
+  [quickshell]="quickshell ttf-jetbrains-mono ttf-jetbrains-mono-nerd wl-clipboard"
   [hypr]="hypridle"
 )
 
@@ -331,27 +331,33 @@ post_quickshell() {
   return 0
 }
 
-# Hooks roxy/lock.conf into the user's own hyprland.conf instead of owning it
+# Hooks roxy/shell.conf into the user's own hyprland.conf instead of owning it
 post_hypr() {
   local conf="$HOME/.config/hypr/hyprland.conf"
-  local line="source = ~/.config/hypr/roxy/lock.conf"
+  local line="source = ~/.config/hypr/roxy/shell.conf"
+  local old_line="source = ~/.config/hypr/roxy/lock.conf"
   if [[ ! -f $conf ]]; then
     warn "No ~/.config/hypr/hyprland.conf found. Add this line to your Hyprland config:"
     info "$line"
     return 0
   fi
   if grep -qF "$line" "$conf"; then
-    ok "hyprland.conf already sources roxy/lock.conf"
+    ok "hyprland.conf already sources roxy/shell.conf"
+  elif grep -qF "$old_line" "$conf"; then
+    # Older roxy versions used roxy/lock.conf
+    snapshot_files hyprland-conf ".config/hypr/hyprland.conf"
+    run sed -i "s|$old_line|$line|" "$conf"
+    ok "Updated hyprland.conf: roxy/lock.conf → roxy/shell.conf"
   else
     snapshot_files hyprland-conf ".config/hypr/hyprland.conf"
     if ((DRY_RUN)); then
       info "would append to $conf: $line"
     else
-      printf '\n# roxy: lockscreen keybind, idle and autostart\n%s\n' "$line" >>"$conf"
+      printf '\n# roxy: Quickshell keybinds, idle and autostart\n%s\n' "$line" >>"$conf"
       ok "Added to hyprland.conf: $line"
     fi
   fi
-  info "If your config already binds SUPER+L or starts hypridle, remove those lines to avoid doubles"
+  info "If your config already binds SUPER+L or SUPER+SPACE, or starts hypridle, remove those lines to avoid doubles"
   if command -v hyprctl >/dev/null && ((!DRY_RUN)); then
     hyprctl reload >/dev/null && ok "Hyprland reloaded"
   fi
