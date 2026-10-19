@@ -21,6 +21,7 @@ Dark navy blue, custom shell, everything built by hand.
 | Terminal | Ghostty |
 | Terminal shell | fish + Starship |
 | System info | fastfetch with your own image as ASCII logo |
+| Boot menu | GRUB theme, terminal style (`roxy grub`) |
 | Dotfile management | GNU Stow via the `roxy` CLI |
 
 ## Planned features
@@ -36,6 +37,7 @@ Dark navy blue, custom shell, everything built by hand.
 - [ ] Vencord theme generated from the same color palette (based on system24 theme)
 - [ ] Spotify theme (Spicetify): borderless cover tiles, icon rail, queue as a table, floating player bar
 - [ ] Ghostty, fish, Starship and fastfetch in Roxy colors
+- [ ] GRUB theme (ASCII art section planned for later)
 - [ ] Hotkey overlay (holding Super highlights bound keys), later on keyboard LEDs
 - [ ] Multi-theme switcher
 
@@ -81,6 +83,7 @@ roxy-dots/
 ├── themes/            # Color palettes (roxy.json, ...)
 ├── scripts/           # Theme generator and helpers
 ├── vencord/           # Vesktop theme (system24 + Roxy colors)
+├── grub/roxy/         # GRUB theme, copied to /boot by `roxy grub`
 ├── assets/            # Characters, wallpapers per theme
 ├── PLAN.md
 └── README.md
@@ -107,7 +110,15 @@ roxy remove spicetify       # unlink a package
 roxy backup                 # snapshot configs and app settings
 roxy restore                # list backups
 roxy restore latest         # put the newest one back
+roxy grub                   # theme the GRUB boot menu (sudo)
+roxy grub remove            # switch it off again
 ```
+
+`roxy grub` only works when the system boots with GRUB (`/boot/grub/grub.cfg` exists;
+the CachyOS installer also offers systemd-boot and Limine). It builds the fonts from
+JetBrains Mono, copies the theme to `/boot/grub/themes/roxy`, sets `GRUB_THEME` in
+`/etc/default/grub` (the original is saved once to `~/.local/state/roxy-dots/`) and
+rebuilds `grub.cfg`. `roxy update` refreshes an installed GRUB theme too.
 
 Backups live in `~/.local/state/roxy-dots/backup/` (one folder per snapshot, named by date
 and reason). `install` moves conflicting configs there, `update` and `restore` take a

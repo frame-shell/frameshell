@@ -6,6 +6,7 @@
 #   roxy remove  <package...>   unlink configs (dependencies stay installed)
 #   roxy backup  [package...]   snapshot the current configs and app settings
 #   roxy restore [name|latest]  list backups, or put one back
+#   roxy grub [install|remove]  theme the GRUB boot menu (copies to /boot, needs sudo)
 #   roxy status                 show what is linked and what is missing
 #
 # Options: -n/--dry-run (print what would happen), -y/--yes (no questions)
@@ -15,6 +16,8 @@ set -euo pipefail
 REPO="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
 STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/roxy-dots"
 BACKUP_ROOT="$STATE_DIR/backup"
+GRUB_THEME_DIR="/boot/grub/themes/roxy"
+GRUB_DEFAULT_FILE="/etc/default/grub"
 
 PACKAGES=(ghostty fish starship fastfetch spicetify vencord)
 
@@ -95,6 +98,7 @@ usage() {
     remove  <pkg...>      unlink configs, dependencies stay installed
     backup  [pkg...]      snapshot the current configs and app settings
     restore [name|latest] list backups, or put one back
+    grub [install|remove] theme the GRUB boot menu (copies to /boot, needs sudo)
     status                show what is linked and what is missing
 
   ${c_bold}Options${c_reset}
@@ -316,6 +320,105 @@ post_vencord() {
   ok "Theme enabled in Vesktop"
 }
 
+# ── GRUB ─────────────────────────────────────────────────────
+# GRUB reads its theme from /boot before /home exists, so the theme is
+# copied there instead of linked.
+
+need_grub() {
+  [[ -f /boot/grub/grub.cfg ]] && command -v grub-mkconfig >/dev/null \
+    || die "This system does not boot with GRUB (no /boot/grub/grub.cfg)."
+}
+
+# Path of a JetBrains Mono TTF in the given style (Regular, Bold)
+grub_font_src() {
+  local style=$1 f
+  for f in /usr/share/fonts/TTF/JetBrainsMono-"$style".ttf \
+           /usr/share/fonts/truetype/jetbrains-mono/JetBrainsMono-"$style".ttf; do
+    [[ -f $f ]] && { echo "$f"; return 0; }
+  done
+  f=$(fc-match -f '%{file}' "JetBrains Mono:style=$style" 2>/dev/null || true)
+  [[ $f == *JetBrains* ]] && echo "$f"
+  return 0
+}
+
+grub_apply() {
+  step "Fonts"
+  local tmp regular bold
+  tmp="$(mktemp -d)"
+  regular=$(grub_font_src Regular)
+  bold=$(grub_font_src Bold)
+  if [[ -z $regular || -z $bold ]] && ((!DRY_RUN)); then
+    die "JetBrains Mono not found (install ttf-jetbrains-mono)"
+  fi
+  # Names must match theme.txt: "Roxy Mono Regular 16" etc.
+  run grub-mkfont -n "Roxy Mono" -s 14 -o "$tmp/roxy-regular-14.pf2" "$regular"
+  run grub-mkfont -n "Roxy Mono" -s 16 -o "$tmp/roxy-regular-16.pf2" "$regular"
+  run grub-mkfont -n "Roxy Mono" -s 16 -o "$tmp/roxy-bold-16.pf2" "$bold"
+  ok "Fonts built"
+
+  step "Theme files"
+  run sudo install -d "$GRUB_THEME_DIR"
+  run sudo cp "$REPO"/grub/roxy/* "$tmp"/*.pf2 "$GRUB_THEME_DIR/"
+  rm -rf "$tmp"
+  ok "Copied to $GRUB_THEME_DIR"
+
+  step "GRUB config"
+  if [[ ! -f $STATE_DIR/grub-default.orig ]]; then
+    run mkdir -p "$STATE_DIR"
+    run cp "$GRUB_DEFAULT_FILE" "$STATE_DIR/grub-default.orig"
+    ok "Original saved to $STATE_DIR/grub-default.orig"
+  fi
+  local line="GRUB_THEME=\"$GRUB_THEME_DIR/theme.txt\""
+  if grep -qE '^#?GRUB_THEME=' "$GRUB_DEFAULT_FILE"; then
+    run sudo sed -i -E "s|^#?GRUB_THEME=.*|$line|" "$GRUB_DEFAULT_FILE"
+  else
+    run sudo sed -i "\$a $line" "$GRUB_DEFAULT_FILE"
+  fi
+  ok "Set $line"
+  # A theme needs the graphical terminal
+  if grep -qE '^GRUB_TERMINAL_OUTPUT=.*console' "$GRUB_DEFAULT_FILE"; then
+    run sudo sed -i -E 's|^(GRUB_TERMINAL_OUTPUT=.*console.*)|#\1|' "$GRUB_DEFAULT_FILE"
+    warn "Commented out GRUB_TERMINAL_OUTPUT=console"
+  fi
+
+  step "grub.cfg"
+  run sudo grub-mkconfig -o /boot/grub/grub.cfg
+  ok "Rebuilt /boot/grub/grub.cfg"
+}
+
+cmd_grub() {
+  local action=${1:-install}
+  need_arch
+  need_grub
+  header
+  case $action in
+    install)
+      info "Copies the Roxy theme to $GRUB_THEME_DIR and sets GRUB_THEME (needs sudo)"
+      confirm "Install the GRUB theme?" || exit 0
+      step "Dependencies"
+      install_deps ttf-jetbrains-mono
+      grub_apply
+      printf '\n%sDone.%s Reboot to see the new boot menu.\n\n' "$c_ok" "$c_reset"
+      ;;
+    remove)
+      confirm "Remove the Roxy GRUB theme?" || exit 0
+      step "GRUB config"
+      # Only comment out our line; restoring the old file would drop later edits
+      run sudo sed -i -E "s|^GRUB_THEME=\"$GRUB_THEME_DIR/theme.txt\"|#&|" "$GRUB_DEFAULT_FILE"
+      ok "Commented out GRUB_THEME"
+      step "Theme files"
+      run sudo rm -rf "$GRUB_THEME_DIR"
+      ok "Removed $GRUB_THEME_DIR"
+      step "grub.cfg"
+      run sudo grub-mkconfig -o /boot/grub/grub.cfg
+      ok "Rebuilt /boot/grub/grub.cfg"
+      [[ -f $STATE_DIR/grub-default.orig ]] && info "Your original /etc/default/grub is kept at $STATE_DIR/grub-default.orig"
+      return 0
+      ;;
+    *) die "Unknown grub action: $action (install or remove)" ;;
+  esac
+}
+
 # ── Commands ─────────────────────────────────────────────────
 
 cmd_install() {
@@ -389,6 +492,11 @@ cmd_update() {
     ok "Relinked"
     run_post "$p"
   done
+
+  # A plain `roxy update` also refreshes an installed GRUB theme
+  if ((${#requested[@]} == 0)) && [[ -d $GRUB_THEME_DIR ]] && command -v grub-mkconfig >/dev/null; then
+    grub_apply
+  fi
   printf '\n%sDone.%s\n\n' "$c_ok" "$c_reset"
 }
 
@@ -502,6 +610,10 @@ cmd_status() {
 
   [[ :$PATH: == *":$HOME/.local/bin:"* ]] || warn "~/.local/bin is not in PATH, the roxy command will not be found"
 
+  if [[ -f /boot/grub/grub.cfg ]]; then
+    [[ -d $GRUB_THEME_DIR ]] && ok "GRUB theme installed" || info "GRUB theme not installed (roxy grub)"
+  fi
+
   local backups
   backups=$(list_backups | wc -l)
   info "${backups// /} backups in $BACKUP_ROOT (roxy restore)"
@@ -539,6 +651,7 @@ main() {
     remove | rm | uninstall) cmd_remove "${args[@]}" ;;
     backup) cmd_backup "${args[@]}" ;;
     restore) cmd_restore "${args[@]}" ;;
+    grub) cmd_grub "${args[@]}" ;;
     status | st | doctor) cmd_status ;;
     help) usage ;;
     *) die "Unknown command: $cmd (try: roxy help)" ;;
