@@ -250,10 +250,13 @@ with "open", "folder" and "delete". grim takes the picture, wl-copy fills the cl
 (`screenshot/Screenshot.qml`, `qs ipc call screenshot region|screen`).
 
 Super+Shift+R records instead: the same picker in red, then wf-recorder records the region,
-window or screen until you press Super+Shift+R again or click `● rec` in the bar. The video
-goes to `~/Videos/recordings` (your XDG videos folder) as MP4; the notification offers
-"open", "folder", "copy" (the file itself, to paste into a chat) and "delete". Without
-sound by default; `recordAudio: true` in `config/Config.qml` records the default input
+window or screen until you stop it, with the same key or a click on `● rec` in the bar. The video
+goes to `~/Videos/recordings` (your XDG videos folder) as MP4; the notification offers open,
+folder, copy (the file, for chats) and delete. The audio panel bottom left in the picker picks the
+sound: the GoXLR's channels (system, game, chat, music, chat mic, sampler, stream mix; without a
+GoXLR the default output and mic), each with its own level. More than one channel is mixed into a
+sink that wf-recorder records (`frame-record-mix`, PipeWire null sink and loopbacks, gone again
+when the recording ends). The choice is kept in `~/.local/state/frameshell/record-audio.json`
 (`services/Recorder.qml`, `qs ipc call screenshot record`).
 
 ## Lockscreen
