@@ -13,6 +13,13 @@ is busy with something else, like Super+Space or dragging a window
 (`hypr/.config/hypr/frame/hotkeys.lua`). `qs ipc call hotkeys toggle` opens it without
 holding anything.
 
+On an AULA F75 the keys themselves light up while modifiers are held, with what the held
+combination does (see [keyboard.md](keyboard.md)).
+
+Windows over each other: Alt+Tab goes to the next window and brings it up, Super+Alt+B sends
+the active window to the back, Super+Alt+S puts it into the scratchpad and Super+S shows and
+hides the scratchpad (Super+Shift+S is the screenshot).
+
 The list is read live from `hyprctl binds`. Give your own binds a description to name
 them, optionally with a group: `{ description = "media · next song" }`.
 

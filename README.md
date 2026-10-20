@@ -50,6 +50,8 @@ theme; a connected GoXLR gets its utility on its own. Installed from this repo b
 | Super+W | wallpapers |
 | Super+K | keyboard: lighting, Fn keys, key colors (AULA F75, not tested on the board yet) |
 | Super+L | lock |
+| Alt+Tab, Super+Alt+B | next window brought up, active window to the back |
+| Super+Alt+S, Super+S | window into the scratchpad and back, show the scratchpad |
 | Print, Shift+Print | screenshot: region or window, whole screen |
 | Super+Shift+R | screen recording, again to stop |
 | Super+wheel | zoom out to every window (canvas layout) |

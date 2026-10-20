@@ -43,6 +43,7 @@ frame boot                   # boot splash (Plymouth) and text console colors (s
 frame boot remove            # the distro's splash and default console colors again
 frame login                  # the lockscreen look as the login screen (greetd, sudo)
 frame login remove           # back to the greeter
+frame login auto             # no login screen at boot, straight into Hyprland (Super+L locks)
 frame wallpaper backend mpv  # wallpaper backend: both, mpv or image
 frame spotify login          # Spotify Web API for the launcher, see spotify.md
 frame layout canvas          # infinite canvas; frame layout tiling goes back
@@ -59,6 +60,11 @@ Quickshell and a compositor are there, it takes the config file greetd's service
 reads, and afterwards it reads the file back. The original config is kept twice, in
 `~/.local/state/frameshell/` and as `config.toml.frameshell-orig` next to it;
 `frame login remove` puts it back and refuses to delete anything when neither copy exists.
+
+`frame login auto` skips the login screen: greetd's `[initial_session]` starts Hyprland for your
+user at boot without a password, and the lockscreen is Super+L. The greeter in
+`[default_session]` stays for after a logout. Anyone who can turn the machine on gets your
+desktop, so this is for a machine that is yours alone. `frame login remove` undoes both.
 `frame status` says when greetd no longer starts the frameshell greeter (a package update
 can replace the config); `frame login` again fixes that.
 

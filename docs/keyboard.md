@@ -66,11 +66,18 @@ to start live every time.
 
 Two things happen on their own once the app is live:
 
-- **Hotkey overlay:** while Super is held and the overlay is open, the keys bound with Super
-  light up on the F75 in the theme's primary color (Super itself in secondary) on the theme's
-  background. This is a live frame in RAM, nothing is saved, and the board's own effect comes back
-  when you let go (`frame-keyboard highlight --hold`, ended with SIGTERM). If the shell dies, the
-  process notices and stops too.
+- **Hotkey hints:** while modifiers are held, the keys that do something with them light up
+  on the F75: with exactly what is held in the theme's text color (bright), keys that need one
+  modifier more dimmed, the held modifiers in primary, the rest in the theme's background.
+  Super with anything counts, and two other modifiers together (Ctrl+Alt, Ctrl+Shift); a lone
+  Shift or Ctrl is typing. Hyprland reports the modifiers a moment after they settle
+  (`hypr/frame/hotkeys.lua`, `qs ipc call keyboard mods super+shift`), so Ctrl+C and Super+Space
+  light nothing. The binds are read fresh each time, so the keys follow the mode (the canvas
+  swaps binds while the overview is open). One `frame-keyboard highlight --stdin` runs for the
+  whole time something is held and takes the new key list on stdin, so Super → Super+Shift
+  changes the frame without the board falling back to its effect in between. The hotkey overlay
+  (Super held for 1.5 s, or opened by hand) counts as Super held. Nothing is saved on the board;
+  letting go ends the process, which sends the stop packet, and the board's own effect comes back.
 - **Theme:** `frame theme set` writes the *split* style in the new colors to the keys (flash, so
   only on a theme change). A board showing another effect keeps it; the colors show once you
   pick self-define (`style split --keep-effect`). `frame` reads `keyboardLive` from Config.qml for
@@ -272,8 +279,9 @@ The app's music code (0x0047f1c0) sends size 0x17A, and **OpenRGB** sends the sa
 `06 08 00 00 01 00 7a 01`. To stop, the app sends INDEX 2 with `00 00 00` (**app**; **L65 hw**).
 Frames stay in RAM. OpenRGB repeats the frame every second because otherwise the board falls
 back to its effect (**OpenRGB**). `frame-keyboard highlight` repeats it every 0.5 s and sends
-the stop at the end. That fits the hotkey overlay: start `highlight --live --hold <keys>` when
-Super goes down and stop the process when it comes up.
+the stop at the end. That fits the hotkey hints: `highlight --live --stdin` starts when a
+modifier goes down, every new combination is one line on its stdin, and the process ends when
+everything is up.
 
 ## 2.4 GHz dongle (written down, not implemented)
 
