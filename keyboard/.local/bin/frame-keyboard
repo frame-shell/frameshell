@@ -20,7 +20,8 @@ Usage:
                                                switch the built-in effect (a color goes into the table)
   frame-keyboard fn <key>=<action> ...         set Fn-layer keys (--layer fn1|fn2|base)
   frame-keyboard fn --show | --reset <key>...  print the layer / put keys back to the factory Fn action
-  frame-keyboard colors [--all C] <key>=C ...  per-key colors, kept on the keyboard ("Self-define")
+  frame-keyboard colors [--all C] <key>=C ...  per-key colors, kept on the keyboard ("Self-define");
+                                               keys not named keep their color
   frame-keyboard style solid|split|rows        per-key style from the frameshell theme
   frame-keyboard highlight <keys> [-c C] [--base C] [--hold | --seconds N]
                                                light keys live (RAM only, nothing saved), then stop
@@ -64,9 +65,6 @@ CMD_PERKEY = 0x06         # "Self-define" per-key colors: planes R, G, B of 126 
 CMD_FRAME = 0x08          # live frame in RAM, 126 x RGB; INDEX 2 + 00 00 00 ends it
 CMD_COLORTAB = 0x0A       # color table: a 21-byte row (7 RGB slots) per effect, 5A A5 at 0x1FA
 CMD_DEVICE_ID = 0x82      # read only, 6 bytes, see KNOWN_IDS
-# The only commands this tool writes. Never 0x05 (macros), 0x11 (reset) or report 5 (bootloader).
-WRITABLE = {CMD_KEYS, CMD_CONFIG, CMD_PERKEY, CMD_FRAME, CMD_COLORTAB}
-
 MATRIX_LEN = 128          # KB.ini MatrixLen: entries per key layer
 LAYER_BYTES = MATRIX_LEN * 4
 PLANE = 126               # per-key plane stride the app uses (0x7e)
@@ -74,6 +72,16 @@ PERKEY_BYTES = MATRIX_LEN * 3   # what the app sends: three planes of 126 and 6 
 FRAME_BYTES = 126 * 3     # 0x17a, interleaved R G B per slot
 CONFIG_BYTES = 128
 COLORTAB_BYTES = 512
+
+# The only writes this tool makes, (command, index) -> size. Never 0x05 (macros), 0x11 (reset)
+# or report 5 (bootloader).
+WRITE_SIZES = {
+    **{(CMD_KEYS, layer): LAYER_BYTES for layer in range(4)},
+    (CMD_CONFIG, 0): CONFIG_BYTES, (CMD_PERKEY, 0): PERKEY_BYTES, (CMD_COLORTAB, 0): COLORTAB_BYTES,
+    (CMD_FRAME, 0): FRAME_BYTES, (CMD_FRAME, 2): 3,
+}
+WRITABLE = {cmd for cmd, _ in WRITE_SIZES}
+READABLE = {CMD_KEYS | 0x80, CMD_CONFIG | 0x80, CMD_PERKEY | 0x80, CMD_COLORTAB | 0x80, CMD_DEVICE_ID}
 MARK = b"\x5a\xa5"
 LAYER_END = b"\x00\x00" + MARK  # last entry of every layer when KB.ini says CRC=1
 
@@ -98,6 +106,7 @@ SLOTS = {
     "f12": 78, "backspace": 79, "backslash": 80, "return": 81, "up": 82, "down": 83,
     "knob": 84, "delete": 85, "prior": 86, "next": 87, "end": 88, "right": 89,
 }
+SLOT_NAME = {slot: name for name, slot in SLOTS.items()}
 ALIASES = {
     "escape": "esc", "caps": "caps_lock", "shift": "shift_l", "lshift": "shift_l",
     "ctrl": "control_l", "control": "control_l", "lctrl": "control_l", "rctrl": "control_r",
@@ -110,7 +119,8 @@ ALIASES = {
 LAYOUT_DE = {
     "z": "y", "y": "z", "ssharp": "minus", "dead_acute": "equal", "acute": "equal",
     "udiaeresis": "bracketleft", "plus": "bracketright", "odiaeresis": "semicolon",
-    "adiaeresis": "apostrophe", "numbersign": "backslash", "minus": "slash",
+    "adiaeresis": "apostrophe", "minus": "slash",
+    "numbersign": "backslash",   # guess: an ANSI board has # on the backslash key; ISO slots are unknown
     "dead_circumflex": "grave", "asciicircum": "grave",
 }
 ROWS = [  # top to bottom, for `keys` and the styles
@@ -177,7 +187,7 @@ FN_DEFAULTS = {
     "u": 0x00000046, "i": 0x00000047, "o": 0x00000048, "backslash": 0x08000000,
     "g": 0x0700000A, "b": 0x07000011, "super_l": 0x07000001, "up": 0x08030100,
     "left": 0x08040200, "down": 0x08030200, "right": 0x08040100, "end": 0x0000004A,
-    "shift_l": 0x08000001,
+    "shift_l": 0x08000001, "knob": 0x0700001D,
 }
 
 NAMED_COLORS = {"red": "ff0000", "green": "00ff00", "blue": "0000ff", "white": "ffffff",
@@ -235,9 +245,14 @@ class Wired:
         self.live, self.verbose, self.node, self.fd = live, verbose, node, None
         if not live:
             return
-        if not self.node:
-            nodes = hidraw_nodes()
-            found = [n for n in nodes if (n[1], n[2]) == (WIRED_VID, WIRED_PID) and n[4]]
+        nodes = hidraw_nodes()
+        found = [n for n in nodes if (n[1], n[2]) == (WIRED_VID, WIRED_PID) and n[4]]
+        if self.node:
+            # A node given by hand still has to be the F75's configuration interface
+            if os.path.realpath(self.node) not in [n[0] for n in found]:
+                raise Fail(f"{self.node} is not the configuration interface of an AULA F75 "
+                           "(frame-keyboard list)")
+        else:
             if not found:
                 if any((n[1], n[2]) == (DONGLE_VID, DONGLE_PID) for n in nodes):
                     raise Fail("only the 2.4 GHz dongle is there; this version talks to the keyboard "
@@ -287,9 +302,24 @@ class Wired:
                     raise Fail(f"SET_FEATURE failed: {e}")
                 time.sleep(0.07)
 
+    def _get(self):
+        import fcntl
+        resp = bytearray(REPORT_LEN)
+        for attempt in range(3):
+            resp[0] = REPORT_ID
+            try:
+                fcntl.ioctl(self.fd, HIDIOCGFEATURE, resp)
+                return resp
+            except OSError as e:
+                if attempt == 2:
+                    raise Fail(f"GET_FEATURE failed: {e}")
+                time.sleep(0.07)
+
     def write(self, what, cmd, data, index=0, delay=0.0):
         if cmd not in WRITABLE:
             raise Fail(f"refusing to write command {cmd:#04x}")
+        if WRITE_SIZES.get((cmd, index)) != len(data):
+            raise Fail(f"refusing to write {len(data)} bytes with command {cmd:#04x} index {index}")
         chunks = [data[i:i + CHUNK] for i in range(0, len(data), CHUNK)] or [b""]
         for n, chunk in enumerate(chunks):
             buf = self._packet(cmd, index, len(chunk), chunk, len(chunks), n)
@@ -302,6 +332,8 @@ class Wired:
         """SET_FEATURE with the read command (cmd | 0x80), then GET_FEATURE.
         A dry run returns the placeholder instead."""
         cmd |= 0x80
+        if cmd not in READABLE:
+            raise Fail(f"refusing to read with command {cmd:#04x}")
         if not self.live:
             print(f"[dry-run] {what}: read skipped (cmd {cmd:02x}), using a placeholder")
             return bytes(placeholder if placeholder is not None else bytes(size))
@@ -313,14 +345,7 @@ class Wired:
             self._show(what + " (read request)", buf, 0)
             self._set(buf)
             time.sleep(0.02)
-            resp = bytearray(REPORT_LEN)
-            resp[0] = REPORT_ID
-            import fcntl                   # Linux only; a dry run never gets here
-            try:
-                fcntl.ioctl(self.fd, HIDIOCGFEATURE, resp)
-            except OSError as e:
-                raise Fail(f"GET_FEATURE failed: {e}")
-            out += resp[8:8 + part]
+            out += self._get()[8:8 + part]
         return bytes(out)
 
 
@@ -428,8 +453,9 @@ def parse_color(text, theme):
     return tuple(int(t[i:i + 2], 16) for i in (0, 2, 4))
 
 
-def parse_action(text):
-    """Fn action -> entry bytes (type, mods, key2, key1)."""
+def parse_action(text, layout="us"):
+    """Fn action -> entry bytes (type, mods, key2, key1). HID usages name physical keys, so a
+    QWERTZ name is turned into the US name of the same key first."""
     t = text.strip().lower()
     if t in ("none", "disable"):
         return (0, 0, 0, 0)
@@ -448,6 +474,8 @@ def parse_action(text):
         if p in mod_bits and len(parts) > 1:
             mods |= mod_bits[p]
             continue
+        if layout == "de":
+            p = LAYOUT_DE.get(p, p)
         p = ALIASES.get(p, p)
         if p not in HID:
             raise Fail(f"unknown action '{text}': a key (f5), a combo (ctrl+alt+t), "
@@ -545,28 +573,42 @@ def cmd_restore(a, dev):
         raise Fail("restore takes a file from `frame-keyboard backup` (...-config.bin, ...-layer-fn1.bin ...)")
     data = path.read_bytes()
     kind = m.group(1)
-    check_model(dev, a.force_model)
+    # Check the file completely before anything goes to the keyboard
     if kind == "config":
         if len(data) != CONFIG_BYTES:
             raise Fail("wrong size for a config block")
         check_mark(data, 0x7E, "the backup")
-        dev.write("config (restore)", CMD_CONFIG, data, delay=0.06)
     elif kind == "colortab":
         if len(data) != COLORTAB_BYTES:
             raise Fail("wrong size for a color table")
         check_mark(data, 0x1FA, "the backup")
-        dev.write("color table (restore)", CMD_COLORTAB, data)
     elif kind == "perkey":
         if len(data) != PERKEY_BYTES:
             raise Fail("wrong size for per-key colors")
-        dev.write("per-key colors (restore)", CMD_PERKEY, data)
     else:
-        layer = m.group(2)
         if len(data) != LAYER_BYTES or data[-4:] != LAYER_END:
             raise Fail("the layer backup has the wrong size or no 00 00 5A A5 at the end")
-        if layer == "base" and data[FN_SLOT * 4:FN_SLOT * 4 + 4] != b"\x0d\x00\x00\x00":
+        if m.group(2) == "base" and data[FN_SLOT * 4:FN_SLOT * 4 + 4] != b"\x0d\x00\x00\x00":
             raise Fail("this base layer has no Fn on the Fn key; refusing (Fn would be gone)")
+    check_model(dev, a.force_model)
+    # Like every other write: read and check what is there now and keep a copy of it
+    cfg = read_config(dev)
+    if kind == "config":
+        write_config(dev, bytearray(data), cfg)
+    elif kind == "colortab":
+        old = dev.read("color table", CMD_COLORTAB, COLORTAB_BYTES, placeholder=placeholder_colortab())
+        check_mark(old, 0x1FA, "the color table on the keyboard")
+        save_backup("colortab", old, dev.live)
+        dev.write("color table (restore)", CMD_COLORTAB, data)
+    elif kind == "perkey":
+        save_backup("perkey", dev.read("per-key colors", CMD_PERKEY, PERKEY_BYTES), dev.live)
+        dev.write("per-key colors (restore)", CMD_PERKEY, data)
+        write_config(dev, bytearray(cfg), cfg)
+    else:
+        layer = m.group(2)
+        save_backup(f"layer-{layer}", read_layer(dev, LAYERS[layer]), dev.live)
         dev.write(f"key layer {layer} (restore)", CMD_KEYS, data, index=LAYERS[layer])
+        write_config(dev, bytearray(cfg), cfg)      # commits the layer, as after `fn`
 
 
 def write_config(dev, cfg, old):
@@ -621,19 +663,18 @@ def cmd_effect(a, dev):
 def cmd_fn(a, dev):
     layer_no = LAYERS[a.layer]
     changes = []
+    if a.reset and layer_no != LAYERS["fn1"]:
+        raise Fail("--reset knows the factory Fn layer (fn1) only")
     for item in a.items:
         if a.reset:
-            key = ALIASES.get(item.lower(), item.lower())
             slot = slot_of(item, a.layout)
-            raw = FN_DEFAULTS.get(key, 0) if layer_no == LAYERS["fn1"] else None
-            if raw is None:
-                raise Fail("--reset knows the factory Fn layer (fn1) only")
+            raw = FN_DEFAULTS.get(SLOT_NAME[slot], 0)
             entry = (raw >> 24, (raw >> 16) & 0xFF, (raw >> 8) & 0xFF, raw & 0xFF)
         else:
             if "=" not in item:
                 raise Fail(f"'{item}': write key=action, e.g. f1=play")
             key, action = item.split("=", 1)
-            slot, entry = slot_of(key, a.layout), parse_action(action)
+            slot, entry = slot_of(key, a.layout), parse_action(action, a.layout)
         if slot == FN_SLOT:
             raise Fail("the Fn key itself stays as it is (otherwise Fn could be gone)")
         if slot == SLOTS["knob"] and not a.allow_knob:
@@ -646,22 +687,26 @@ def cmd_fn(a, dev):
     if a.show:
         show_layer(layer_old, a.layer)
         return
+    cfg = read_config(dev)              # checked before anything is written
     layer = bytearray(layer_old)
     if layer_no == LAYERS["base"]:
         print("note: this changes the BASE layer (what the keys do without Fn)")
     for item, slot, entry in changes:
         layer[slot * 4:slot * 4 + 4] = bytes(entry)
         print(f"  {item}: {bytes(entry).hex(' ')} ({describe_entry(entry)})")
+    fn = slice(FN_SLOT * 4, FN_SLOT * 4 + 4)
+    if layer[fn] != layer_old[fn] or bytes(layer[-4:]) != LAYER_END:
+        raise Fail("internal error: the Fn key or the layer end mark would change; nothing written")
     save_backup(f"layer-{a.layer}", layer_old, dev.live)
     dev.write(f"key layer {a.layer}", CMD_KEYS, layer, index=layer_no)
     # The app writes the lighting config after the layers; on the L65 that commits them
-    old = read_config(dev)
-    write_config(dev, bytearray(old), old)
+    write_config(dev, bytearray(cfg), cfg)
 
 
-def perkey_block(colors):
-    """{slot: rgb} -> what the app sends: R plane, G plane, B plane (126 bytes each), 6 spare bytes."""
-    data = bytearray(PERKEY_BYTES)
+def perkey_block(colors, start=None):
+    """{slot: rgb} -> what the app sends: R plane, G plane, B plane (126 bytes each), 6 spare bytes.
+    Keys not in colors keep their color from start."""
+    data = bytearray(start if start is not None else PERKEY_BYTES)
     for slot, (r, g, b) in colors.items():
         if slot < PLANE:
             data[slot], data[PLANE + slot], data[2 * PLANE + slot] = r, g, b
@@ -670,10 +715,10 @@ def perkey_block(colors):
 
 def apply_perkey(a, dev, colors):
     check_model(dev, a.force_model)
+    old = read_config(dev)              # checked before anything is written
     old_keys = dev.read("per-key colors", CMD_PERKEY, PERKEY_BYTES)
     save_backup("perkey", old_keys, dev.live)
-    dev.write("per-key colors (self-define)", CMD_PERKEY, perkey_block(colors), index=0)
-    old = read_config(dev)
+    dev.write("per-key colors (self-define)", CMD_PERKEY, perkey_block(colors, old_keys), index=0)
     cfg = bytearray(old)
     pos = SELF_DEFINE[0]
     cfg[0x09], cfg[0x0A], cfg[0x0B] = 1, SELF_DEFINE[1], 0x20
@@ -756,7 +801,7 @@ def cmd_highlight(a, dev):
         while not stop and (until is None or time.monotonic() < until):
             dev.write("live frame", CMD_FRAME, block, index=0, delay=0.007)
             for _ in range(10):
-                if stop:
+                if stop or (until is not None and time.monotonic() >= until):
                     break
                 time.sleep(0.05)
     finally:
@@ -777,7 +822,8 @@ def main():
     common.add_argument("--hidraw", help="use this /dev/hidrawN")
     common.add_argument("--verbose", "-v", action="store_true", help="print the packets in live mode too")
     common.add_argument("--force-model", action="store_true", help=argparse.SUPPRESS)
-    common.add_argument("--layout", choices=["us", "de"], default=os.environ.get("FRAME_KEYBOARD_LAYOUT", "us"),
+    common.add_argument("--layout", choices=["us", "de"],
+                        default=os.environ.get("FRAME_KEYBOARD_LAYOUT", "us").lower()[:2],
                         help="read key names as US or German (QWERTZ) layout")
     common.add_argument("--theme", help="frameshell theme for color roles (default: the active one)")
 
@@ -831,7 +877,7 @@ def main():
          "fn": cmd_fn, "colors": cmd_colors, "style": cmd_style, "highlight": cmd_highlight,
          "stop": cmd_stop}[a.cmd](a, dev)
         return 0
-    except Fail as e:
+    except (Fail, OSError) as e:
         print(f"frame-keyboard: {e}", file=sys.stderr)
         return 1
 
