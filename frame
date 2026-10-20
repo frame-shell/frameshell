@@ -18,6 +18,7 @@
 #   frame layout [tiling|canvas] Hyprland tiling or the infinite canvas
 #   frame status                 show what is linked and what is missing
 #   frame clean                  free disk space: caches, orphans, old backups, logs
+#   frame migrate                move to github.com/frame-shell (one repo per module)
 #
 # Options: -n/--dry-run (print what would happen), -y/--yes (no questions)
 
@@ -2103,6 +2104,79 @@ setup_goxlr() {
 }
 
 # frame layout [tiling|canvas]: switch between Hyprland's tiling and the infinite canvas
+# frame migrate: from this one-repo frameshell to the frame-shell organization, where the
+# CLI and every module are their own repos and only what you use gets downloaded. The
+# packages linked from here are linked again from the new modules; theme, layout,
+# wallpapers, backups and the login screen stay as they are (they live outside the repo).
+cmd_migrate() {
+  need_arch
+  header
+  local data="${XDG_DATA_HOME:-$HOME/.local/share}/frameshell"
+  local new="$data/cli" pkgs=() p
+  mapfile -t pkgs < <(installed_packages)
+  info "frameshell moved to github.com/frame-shell: one repo per module, the frame command in its own"
+  if ((${#pkgs[@]})); then
+    info "Linked from $REPO now: ${pkgs[*]}"
+    info "They come back from the new modules; theme, layout and your settings stay"
+  else
+    info "Nothing is linked from $REPO; this only sets up the new frame command"
+  fi
+  confirm "Move to the new layout?" || exit 0
+
+  if ((${#pkgs[@]})); then
+    step "Backup"
+    snapshot_pkgs migrate "${pkgs[@]}"
+    step "Unlink the old repo"
+    for p in "${pkgs[@]}"; do stow_pkg -D "$p"; done
+    ok "Unlinked ${#pkgs[@]} packages"
+  fi
+
+  # Your own pictures (fastfetch logo, wallpapers) were in the repo's git-ignored assets/
+  if [[ -d $REPO/assets ]] && [[ -n $(ls -A "$REPO/assets" 2>/dev/null) ]]; then
+    step "Your own pictures"
+    run mkdir -p "$data/assets"
+    run cp -a "$REPO/assets/." "$data/assets/"
+    ok "Copied to ${data/#"$HOME"/\~}/assets"
+  fi
+
+  step "The new frame command"
+  if [[ -d $new/.git ]]; then
+    run git -C "$new" pull --ff-only --quiet
+  else
+    run mkdir -p "$data"
+    run git clone --depth 1 --quiet https://github.com/frame-shell/cli "$new"
+  fi
+  ok "${new/#"$HOME"/\~}"
+
+  step "Modules"
+  # The new CLI gets the modules for these packages, renders the theme and links them
+  # (and points ~/.local/bin/frame at itself)
+  if ((${#pkgs[@]})); then
+    if ! run "$new/frame" install -y "${pkgs[@]}"; then
+      # Back to how it was, so the desktop keeps working until the next try
+      warn "The new install stopped; linking the old repo again"
+      for p in "${pkgs[@]}"; do stow_pkg -R "$p" || true; done
+      run ln -sf "$REPO/frame" "$HOME/.local/bin/frame"
+      die "Nothing changed for you; the backup is in $LAST_BACKUP. Try again: frame migrate"
+    fi
+  else
+    run "$new/frame" install
+  fi
+
+  step "The old repo"
+  if [[ -n $(git -C "$REPO" status --porcelain 2>/dev/null) ]]; then
+    warn "$REPO has local changes, so it stays; delete it yourself once you do not need them"
+  elif [[ -n $(git -C "$REPO" log --oneline '@{u}..' 2>/dev/null) ]]; then
+    warn "$REPO has commits that were never pushed, so it stays"
+  elif confirm "Delete $REPO? Nothing uses it any more"; then
+    run rm -rf "$REPO"
+    ok "Deleted"
+  else
+    info "Kept; nothing uses it any more, delete it whenever you like"
+  fi
+  printf '\n%sDone.%s frame now runs from %s. Log out and in once.\n\n' "$c_ok" "$c_reset" "${new/#"$HOME"/\~}"
+}
+
 cmd_layout() {
   local want=${1:-} now
   now=$(current_layout)
@@ -2530,6 +2604,7 @@ main() {
     wallpaper | wp) cmd_wallpaper "${args[@]}" ;;
     spotify) cmd_spotify "${args[@]}" ;;
     layout) cmd_layout "${args[@]}" ;;
+    migrate) cmd_migrate ;;
     __complete) cmd_complete "${args[@]}" ;;
     status | st | doctor) cmd_status ;;
     clean) cmd_clean ;;
