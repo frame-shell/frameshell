@@ -281,9 +281,10 @@ Going wireless is a later step that needs its own testing.
 - Firmware: the zip has none, and custom firmware (for example the experimental SMK port for
   the F75) can brick the board. The ISP bootloader (report 5) is off limits.
 - Macros, the reset command (`11`) and any write over the dongle.
-- `frame` and the shell. Once the steps above work, the next step is a `keyboard` package for
-  `frame install` (stow has to skip `udev/`). After that, `frame theme set` can call
-  `frame-keyboard style …` and the hotkey overlay can call `highlight --hold`.
+- `frame install` and automatic hooks. Once the steps above work, the next step is a
+  `keyboard` package for `frame install` (stow has to skip `udev/`). After that,
+  `frame theme set` can call `frame-keyboard style …`, and the hotkey overlay can call
+  `highlight --hold`.
 
 ## Sources
 
