@@ -81,7 +81,7 @@ Backups live in `~/.local/state/frameshell/backup/` (one folder per snapshot, na
 and reason). `install` moves conflicting configs there, `update` and `restore` take a
 snapshot before they change anything. `update` also updates the `frame` CLI itself.
 
-Packages: `ghostty`, `fish`, `starship`, `fastfetch`, `spicetify`, `vencord`, `quickshell`,
+Packages: `ghostty`, `fish`, `starship`, `fastfetch`, `spicetify`, `vencord`, `steam`, `quickshell`,
 `hypr`, `wallpaper`, `zed`, `dolphin`, `zen`. Each package folder mirrors the home directory
 (`ghostty/.config/ghostty/...`); only `zen` mirrors the Zen profile folder instead.
 
@@ -140,6 +140,7 @@ frameshell/
 ├── fastfetch/         # System info, logo from assets/logo.png
 ├── spicetify/         # Spotify theme, launcher extension (Extensions/frameshell.js), frame-spotify (Web API)
 ├── vencord/           # generated Vesktop theme (system24) and plugins/shellBridge
+├── steam/             # Millennium theme (+ generated colors.css) and the frameshell plugin
 ├── wallpaper/         # frame-wallpaper: backends for the wallpaper app
 ├── zed/               # settings.json (+ generated theme)
 ├── dolphin/           # generated KDE color scheme + qt6ct palette

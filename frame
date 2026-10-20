@@ -29,7 +29,7 @@ VENCORD_SRC="${XDG_DATA_HOME:-$HOME/.local/share}/frameshell/vencord"
 THEME_STATE="$STATE_DIR/theme"
 DEFAULT_THEME=periwinkle
 
-PACKAGES=(ghostty fish starship fastfetch spicetify vencord quickshell hypr wallpaper zed dolphin zen)
+PACKAGES=(ghostty fish starship fastfetch spicetify vencord steam quickshell hypr wallpaper zed dolphin zen)
 
 # Distro packages each config needs; AUR ones go through paru/yay
 declare -A DEPS=(
@@ -40,6 +40,8 @@ declare -A DEPS=(
   # curl, jq, openssl: frame-spotify, the Web API helper for the launcher
   [spicetify]="spicetify-cli ttf-jetbrains-mono curl jq openssl"
   [vencord]="vesktop ttf-jetbrains-mono jq git nodejs pnpm"
+  # millennium (AUR) themes Steam and runs the plugin that sends its notifications to the shell
+  [steam]="steam millennium ttf-jetbrains-mono jq"
   # Launcher modes: qt6-websockets (spotify), fd (files), cliphist (clipboard), wtype +
   # unicode-emoji + noto-fonts-emoji (emoji), sound-theme-freedesktop (timer and alarm sound)
   [quickshell]="quickshell ttf-jetbrains-mono ttf-jetbrains-mono-nerd wl-clipboard libpulse pciutils qt6-websockets qt6-imageformats fd cliphist wtype unicode-emoji noto-fonts-emoji sound-theme-freedesktop"
@@ -59,6 +61,7 @@ declare -A EXTRAS=(
   [fish]=".config/fish/config.fish"
   [spicetify]=".config/spicetify/config-xpui.ini"
   [vencord]=".config/vesktop/settings/settings.json"
+  [steam]=".config/millennium/config.json"
   [hypr]=".config/hypr/hyprland.lua .config/hypr/hyprland.conf"
   [wallpaper]=".local/state/frameshell/wallpaper.json"
   [dolphin]=".config/dolphinrc .config/qt6ct/qt6ct.conf .config/kdeglobals"
@@ -679,6 +682,58 @@ post_vencord() {
     ok "ShellBridge enabled, Vesktop uses the frameshell Vencord build"
     info "Start Vesktop to load it"
   fi
+  return 0
+}
+
+# Millennium: the Frameshell theme and the frameshell plugin, which moves Steam's
+# notifications into the shell. A running Steam gets both over Millennium's steam://
+# links; otherwise they go into Millennium's config.json (only while Steam is closed,
+# it writes its own copy back).
+post_steam() {
+  local config="${XDG_CONFIG_HOME:-$HOME/.config}/millennium/config.json" steam_dir
+
+  # Millennium reads themes from ~/.steam/steam/millennium/themes; the package links into
+  # ~/.local/share/Steam, where that points on Arch. Another Steam folder gets a link.
+  steam_dir="$(readlink -f "$HOME/.steam/steam" 2>/dev/null || true)"
+  if [[ -n $steam_dir && -d $steam_dir && $steam_dir != "$(readlink -f "$HOME/.local/share/Steam" 2>/dev/null)" ]]; then
+    local target="$steam_dir/millennium/themes/Frameshell"
+    if [[ -e $target && ! -L $target ]]; then
+      warn "$target exists and is not a link, leaving it alone"
+    else
+      info "Steam lives in $steam_dir, linking the theme there too"
+      run mkdir -p "$steam_dir/millennium/themes"
+      run ln -sfn "$REPO/steam/.local/share/Steam/millennium/themes/Frameshell" "$target"
+    fi
+  fi
+
+  if ! has_pkg millennium && ! has_pkg millennium-bin && ((!DRY_RUN)); then
+    warn "Millennium is not installed, Steam stays as it is (paru -S millennium)"
+    return 0
+  fi
+
+  if command -v pgrep >/dev/null && pgrep -x steam >/dev/null; then
+    # The plugin link reloads Steam's UI
+    run_quiet steam steam://millennium/settings/themes/enable/Frameshell
+    run_quiet steam steam://millennium/settings/plugins/enable/frameshell
+    ok "Theme and plugin turned on in the running Steam"
+    return 0
+  fi
+  if [[ ! -f $config ]]; then
+    info "Start Steam once so Millennium writes its settings, close it, then run: frame update steam"
+    return 0
+  fi
+  if ((DRY_RUN)); then
+    info "would set the theme to Frameshell and enable the frameshell plugin in $config"
+    return 0
+  fi
+  if ! command -v jq >/dev/null; then
+    warn "jq not found, turn it on by hand: Steam → Millennium → Themes → Frameshell, Plugins → frameshell"
+    return 0
+  fi
+
+  json_edit "$config" '.themes.activeTheme = "Frameshell"
+    | .plugins.enabledPlugins = ((.plugins.enabledPlugins // []) + ["frameshell"] | unique)'
+  ok "Theme and plugin enabled, start Steam to load them"
   return 0
 }
 
@@ -1650,6 +1705,7 @@ CORE_PACKAGES=(ghostty fish starship fastfetch quickshell hypr wallpaper)
 OPTIONAL_PACKAGES=(
   "spicetify|Spotify, themed, with search and controls in the launcher"
   "vencord|Vesktop (Discord), themed, with calls and DMs in the shell"
+  "steam|Steam with Millennium, themed, its notifications in the shell"
   "zed|Zed, the code editor"
   "dolphin|Dolphin, the file manager"
   "zen|Zen, the browser"
@@ -1691,7 +1747,7 @@ save_layout() {
 setup_wizard() {
   local mode o
   mode=$(choose "What should be set up?" \
-    "full|everything: the shell plus Spotify, Vesktop, Zed, Dolphin, Zen and Claude Code" \
+    "full|everything: the shell plus Spotify, Vesktop, Steam, Zed, Dolphin, Zen and Claude Code" \
     "pick|the shell, then each app with a yes or no" \
     "shell|only the shell: terminal, prompt, bar, launcher, lockscreen, wallpapers")
   SETUP_PKGS=("${CORE_PACKAGES[@]}")
