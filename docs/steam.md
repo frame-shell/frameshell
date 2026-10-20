@@ -68,13 +68,29 @@ second for the shell's commands. The protocol is in the header of
 To see whether it works: the backend logs to `~/.local/state/millennium/logs/frameshell_log.log`,
 the frontend writes `frameshell` lines to the SharedJSContext console.
 
-## Not tested yet
+## How the plugin hooks in
 
-This was written from Millennium's source (v3.6.2) and a Steam client snapshot, not on a
-running Steam. Check first:
+Checked on Steam 1791918634 with Millennium 3.6.2 (October 2026): the theme shows up and is
+enabled from `frame install steam`, the plugin's Lua backend connects to the shell's socket
+(LuaJIT's ffi works in Millennium's Lua host) and a friend message reaches the shell as a popup
+while Steam's own toast stays away.
 
-- the theme shows up in Millennium's theme list (found through `~/.steam/steam`)
-- `frameshell` is listed and enabled under plugins, and its log says "connected"
-- LuaJIT's ffi works in Millennium's Lua host (a failing `require("ffi")` shows up in that log)
-- a friend message reaches the shell and Steam's own popup stays away
-- "open", "join" and "play" do what they say
+Steam's `NotificationStore.ProcessNotification` would be the natural hook, but it is a bound,
+frozen own property of the store (`Cannot redefine property`). The plugin wraps `BShowToast`
+on the store's prototype instead, which only answers whether a notification gets a toast; for
+what went to the shell it answers no, and the tray entry stays. If Steam renames that method
+the plugin falls back to its toasts and says so in the log.
+
+What the frontend logs goes through the backend into Steam's log, so no SharedJSContext console
+is needed:
+
+```bash
+grep "frameshell:" ~/.local/share/Steam/logs/console-linux.txt
+```
+
+`hooked BShowToast`, `forwarding notifications to the shell` and `→ shell: message` are the
+lines to look for. Millennium loads plugin frontends only at Steam start (its plugin toggle
+reloads a cached copy), so after a change to the plugin restart Steam.
+
+The install links the plugin's files with stow; a Millennium installed before Steam's first
+start misses its hook into Steam's runtime, `frame status` says so.
