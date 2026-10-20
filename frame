@@ -10,6 +10,7 @@
 #                                write every app color file from themes/<name>.json
 #   frame grub [install|remove]  theme the GRUB boot menu (copies to /boot, needs sudo)
 #   frame goxlr                  light the GoXLR in the theme's colors (goxlr-utility)
+#   frame install keyboard       AULA F75: frame-keyboard, its udev rule (sudo) and the Super+K app
 #   frame login [install|remove] the lockscreen look as the login screen (greetd, needs sudo)
 #   frame wallpaper <args…>      passed to frame-wallpaper (backend, set, apply, …)
 #   frame spotify <args…>        passed to frame-spotify (login, logout, status)
@@ -29,7 +30,7 @@ VENCORD_SRC="${XDG_DATA_HOME:-$HOME/.local/share}/frameshell/vencord"
 THEME_STATE="$STATE_DIR/theme"
 DEFAULT_THEME=periwinkle
 
-PACKAGES=(ghostty fish starship fastfetch spicetify vencord steam quickshell hypr wallpaper zed dolphin zen)
+PACKAGES=(ghostty fish starship fastfetch spicetify vencord steam quickshell hypr wallpaper keyboard zed dolphin zen)
 
 # Distro packages each config needs; AUR ones go through paru/yay
 declare -A DEPS=(
@@ -49,6 +50,8 @@ declare -A DEPS=(
   # ffmpeg makes the video thumbnails in the wallpaper app; linux-wallpaperengine
   # comes on top when the "both" backend is picked
   [wallpaper]="jq swaybg mpvpaper ffmpeg"
+  # frame-keyboard talks to the AULA F75 over hidraw with nothing but Python
+  [keyboard]="python"
   [zed]="zed ttf-jetbrains-mono"
   # kio-extras: sftp:// and thumbnails; konsole: the F4 terminal panel;
   # archlinux-xdg-menu: the "Open with" list outside Plasma
@@ -871,6 +874,42 @@ post_wallpaper() {
   fi
   info "Super+W opens the wallpaper app; folders: ~/Pictures/wallpapers and assets/wallpapers"
   info "Change the backend later with: frame wallpaper backend both|mpv|image"
+}
+
+# ── AULA F75 keyboard ────────────────────────────────────────
+
+KEYBOARD_RULE=70-frameshell-aula-f75.rules
+
+# USB 258a:010c is the F75 on the cable, 3554:fa09 its 2.4 GHz dongle
+keyboard_connected() {
+  local d id
+  for d in /sys/bus/usb/devices/*; do
+    [[ -r $d/idVendor && -r $d/idProduct ]] || continue
+    id="$(<"$d/idVendor"):$(<"$d/idProduct")"
+    [[ $id == 258a:010c || $id == 3554:fa09 ]] && return 0
+  done
+  return 1
+}
+
+# The udev rule lets frame-keyboard reach the keyboard without root; it goes to
+# /etc/udev/rules.d only when it is missing or changed, so updates ask for sudo once
+post_keyboard() {
+  local src="$REPO/keyboard/.local/share/frameshell/udev/$KEYBOARD_RULE" dest="/etc/udev/rules.d/$KEYBOARD_RULE"
+  if cmp -s "$src" "$dest"; then
+    ok "udev rule in place ($dest)"
+  else
+    info "frame-keyboard needs a udev rule to reach the keyboard without root (sudo)"
+    if run sudo install -m 644 "$src" "$dest"; then
+      run_quiet sudo udevadm control --reload-rules || true
+      run_quiet sudo udevadm trigger --subsystem-match=hidraw || true
+      ok "udev rule installed; unplug and replug the keyboard once"
+    else
+      warn "Could not install the udev rule; by hand: sudo install -m 644 $src $dest"
+    fi
+  fi
+  keyboard_connected || info "No AULA F75 connected right now; the app finds it once it is plugged in"
+  info "Super+K opens the keyboard app; it starts as a dry run and sends nothing"
+  info "First test on the board: frame-keyboard list, then frame-keyboard info --live (docs/keyboard.md)"
 }
 
 # ── Notification daemons ─────────────────────────────────────
@@ -1771,6 +1810,12 @@ setup_wizard() {
     WANT_GOXLR=1
   fi
 
+  # A connected AULA F75 gets frame-keyboard and the keyboard app
+  if keyboard_connected; then
+    ok "AULA F75 found, the keyboard package comes along"
+    SETUP_PKGS+=(keyboard)
+  fi
+
   if [[ ! -f $LAYOUT_STATE ]]; then
     PICKED_LAYOUT=$(choose "Window layout? (switch any time: frame layout tiling|canvas)" \
       "tiling|Hyprland's tiling with workspaces, as usual" \
@@ -2040,6 +2085,15 @@ cmd_status() {
   ok "Layout $(current_layout) (frame layout tiling|canvas)"
   if goxlr_connected && ! command -v goxlr-daemon >/dev/null; then
     warn "A GoXLR is connected but GoXLR Utility is missing (paru -S goxlr-utility)"
+  fi
+  if keyboard_connected; then
+    if [[ $(link_state keyboard) != linked ]]; then
+      warn "An AULA F75 is connected but the keyboard package is not installed (frame install keyboard)"
+    elif ! cmp -s "$REPO/keyboard/.local/share/frameshell/udev/$KEYBOARD_RULE" "/etc/udev/rules.d/$KEYBOARD_RULE"; then
+      warn "The keyboard's udev rule is missing or old (frame update keyboard)"
+    else
+      ok "AULA F75 set up (Super+K)"
+    fi
   fi
   command -v pacman >/dev/null || warn "pacman not found, dependency checks are skipped"
   command -v stow >/dev/null && ok "stow installed" || warn "stow missing (frame install takes care of it)"

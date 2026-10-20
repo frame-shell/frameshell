@@ -82,7 +82,7 @@ and reason). `install` moves conflicting configs there, `update` and `restore` t
 snapshot before they change anything. `update` also updates the `frame` CLI itself.
 
 Packages: `ghostty`, `fish`, `starship`, `fastfetch`, `spicetify`, `vencord`, `steam`, `quickshell`,
-`hypr`, `wallpaper`, `zed`, `dolphin`, `zen`. Each package folder mirrors the home directory
+`hypr`, `wallpaper`, `keyboard`, `zed`, `dolphin`, `zen`. Each package folder mirrors the home directory
 (`ghostty/.config/ghostty/...`); only `zen` mirrors the Zen profile folder instead.
 
 Manual steps:
@@ -111,6 +111,9 @@ Manual steps:
   `QT_QPA_PLATFORMTHEME=qt6ct`.
 - **Wallpaper Engine:** needs Wallpaper Engine bought on Steam; subscribed Workshop items
   show up in the wallpaper app.
+- **AULA F75:** `frame install keyboard` (also picked by the setup when the keyboard is
+  plugged in) links `frame-keyboard` and installs its udev rule with sudo; replug the
+  keyboard once. Super+K opens the keyboard app, see [keyboard.md](keyboard.md).
 
 Not covered by `frame` yet: Hyprland itself.
 
@@ -125,13 +128,14 @@ frameshell/
 │   ├── shell.qml      # Entry point
 │   ├── config/        # Theme.qml (generated), Config.qml (your settings)
 │   ├── components/    # Frame, Meter, TuiSlider, TuiButton, AppIcon
-│   ├── services/      # Weather, Apps, SystemStats, Audio, GoXLR, Toggles, Notifications, DiscordBridge, Wallpapers
+│   ├── services/      # Weather, Apps, SystemStats, Audio, GoXLR, Toggles, Notifications, DiscordBridge, Wallpapers, Keyboard
 │   ├── lockscreen/    # Lock, LockContext (PAM), LockSurface (UI), pam/
 │   ├── bar/           # Top bar: workspaces, title, clock, media, stats, volume
 │   ├── controlcenter/ # Control center (session, toggles, faders, stats) and app mixer
 │   ├── launcher/      # Launcher (window, IPC), LauncherView (UI), Modes (prefixes, results, Enter)
 │   ├── osd/           # Fader, mute, volume and layout notices
 │   ├── wallpapers/    # Wallpaper app (Super+W)
+│   ├── keyboard/      # Keyboard app for the AULA F75 (Super+K)
 │   ├── media/         # Spotify popup on song change (MPRIS)
 │   └── notifications/ # Popup cards and history
 ├── ghostty/           # Terminal config (+ generated color theme)
@@ -142,6 +146,7 @@ frameshell/
 ├── vencord/           # generated Vesktop theme (system24) and plugins/shellBridge
 ├── steam/             # Millennium theme (+ generated colors.css) and the frameshell plugin
 ├── wallpaper/         # frame-wallpaper: backends for the wallpaper app
+├── keyboard/          # frame-keyboard (AULA F75 over hidraw) and its udev rule
 ├── zed/               # settings.json (+ generated theme)
 ├── dolphin/           # generated KDE color scheme + qt6ct palette
 ├── zen/               # generated user.js + chrome/userChrome.css, linked into the Zen profile

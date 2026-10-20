@@ -1,7 +1,7 @@
 # AULA F75 on Linux
 
 `frame-keyboard` sets the F75's lighting and Fn keys without the Windows app, and the shell
-has an app for it (Super+K). `frame install` does not set it up yet; the protocol below has
+has an app for it (Super+K); `frame install keyboard` sets both up. The protocol below has
 to prove itself on the real board first.
 Everything here was worked out from the vendor software and other people's notes.
 **Nothing has been sent to a keyboard yet.**
@@ -19,10 +19,14 @@ Marks used below:
 ## Install and first test
 
 ```bash
-sudo install -m 644 ~/frameshell/keyboard/udev/70-frameshell-aula-f75.rules /etc/udev/rules.d/
-sudo udevadm control --reload-rules && sudo udevadm trigger   # then replug the keyboard
-ln -s ~/frameshell/keyboard/.local/bin/frame-keyboard ~/.local/bin/
+frame install keyboard
 ```
+
+That links `frame-keyboard` into `~/.local/bin` and installs the udev rule
+(`/etc/udev/rules.d/70-frameshell-aula-f75.rules`, asks for sudo), so the keyboard can be
+reached without root. Unplug and replug the keyboard once afterwards. `frame install`
+without names takes the package along by itself when an F75 is plugged in, and
+`frame update` puts a changed rule in place again.
 
 Test in this order and stop at the first surprise. Steps 1–3 only read, step 4 only touches
 RAM, and from step 5 on the changes go to flash. Each of those writes saves the old block first.
@@ -54,7 +58,7 @@ map with QWERTZ labels and has three tabs:
   them. *fill all* paints every key, and *solid*, *split* and *rows* are the theme styles.
   *write colors* saves them on the keyboard as the Self-define effect.
 
-The app calls `frame-keyboard`, so that has to be in `~/.local/bin` (see above). It starts as
+The app calls `frame-keyboard` in `~/.local/bin` (`frame install keyboard`). It starts as
 a **dry run**: it shows placeholder data, and the log at the bottom shows the packets it would
 have sent. The *dry run* button switches to live until the shell restarts. Once the test
 order above works, set `keyboardLive: true` in `quickshell/.config/quickshell/config/Config.qml`
@@ -281,10 +285,8 @@ Going wireless is a later step that needs its own testing.
 - Firmware: the zip has none, and custom firmware (for example the experimental SMK port for
   the F75) can brick the board. The ISP bootloader (report 5) is off limits.
 - Macros, the reset command (`11`) and any write over the dongle.
-- `frame install` and automatic hooks. Once the steps above work, the next step is a
-  `keyboard` package for `frame install` (stow has to skip `udev/`). After that,
-  `frame theme set` can call `frame-keyboard style …`, and the hotkey overlay can call
-  `highlight --hold`.
+- Automatic hooks. Once the steps above work, `frame theme set` can call
+  `frame-keyboard style …`, and the hotkey overlay can call `highlight --hold`.
 
 ## Sources
 
