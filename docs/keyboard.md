@@ -64,6 +64,18 @@ have sent. The *dry run* button switches to live until the shell restarts. Once 
 order above works, set `keyboardLive: true` in `quickshell/.config/quickshell/config/Config.qml`
 to start live every time.
 
+Two things happen on their own once the app is live:
+
+- **Hotkey overlay:** while Super is held and the overlay is open, the keys bound with Super
+  light up on the F75 in the theme's primary color (Super itself in secondary) on the theme's
+  background. This is a live frame in RAM, nothing is saved, and the board's own effect comes back
+  when you let go (`frame-keyboard highlight --hold`, ended with SIGTERM). If the shell dies, the
+  process notices and stops too.
+- **Theme:** `frame theme set` writes the *split* style in the new colors to the keys (flash, so
+  only on a theme change). A board showing another effect keeps it; the colors show once you
+  pick self-define (`style split --keep-effect`). `frame` reads `keyboardLive` from Config.qml for
+  this, so it stays off until the keyboard is tested.
+
 ## Hardware
 
 | | |
@@ -285,8 +297,8 @@ Going wireless is a later step that needs its own testing.
 - Firmware: the zip has none, and custom firmware (for example the experimental SMK port for
   the F75) can brick the board. The ISP bootloader (report 5) is off limits.
 - Macros, the reset command (`11`) and any write over the dongle.
-- Automatic hooks. Once the steps above work, `frame theme set` can call
-  `frame-keyboard style …`, and the hotkey overlay can call `highlight --hold`.
+- Light effects of our own that run on the PC (music mode, animations): possible with live
+  frames, but the PC has to keep sending them.
 
 ## Sources
 

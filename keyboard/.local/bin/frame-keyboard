@@ -22,8 +22,9 @@ Usage:
   frame-keyboard fn --show | --reset <key>...  print the layer / put keys back to the factory Fn action
   frame-keyboard colors [--all C] <key>=C ...  per-key colors, kept on the keyboard ("Self-define");
                                                keys not named keep their color
-  frame-keyboard style solid|split|rows        per-key style from the frameshell theme
-  frame-keyboard highlight <keys> [-c C] [--base C] [--hold | --seconds N]
+  frame-keyboard style solid|split|rows [--keep-effect]
+                                               per-key style from the frameshell theme
+  frame-keyboard highlight <key[=C]...> [-c C] [--base C] [--hold | --seconds N] [--skip-unknown]
                                                light keys live (RAM only, nothing saved), then stop
   frame-keyboard stop                          end a live frame, back to the saved effect
 
@@ -763,6 +764,10 @@ def apply_perkey(a, dev, colors):
     old_keys = dev.read("per-key colors", CMD_PERKEY, PERKEY_BYTES)
     save_backup("perkey", old_keys, dev.live)
     dev.write("per-key colors (self-define)", CMD_PERKEY, perkey_block(colors, old_keys), index=0)
+    if getattr(a, "keep_effect", False) and old[0x0A] != SELF_DEFINE[1]:
+        # The colors wait on the keyboard until Self-define is picked; the effect stays
+        print("the keyboard keeps its effect; the colors show once self-define is picked")
+        return
     cfg = bytearray(old)
     pos = SELF_DEFINE[0]
     cfg[0x09], cfg[0x0A], cfg[0x0B] = 1, SELF_DEFINE[1], 0x20
@@ -828,7 +833,18 @@ def cmd_highlight(a, dev):
     theme = theme_colors(a.theme)
     lit = parse_color(a.color or theme.get("primary", "white"), theme)
     base = parse_color(a.base or theme.get("bg", "off"), theme)
-    colors = {slot_of(k, a.layout): lit for k in a.keys}
+    colors = {}
+    # "key" lights in the --color, "key=color" in its own; with --skip-unknown, names that are
+    # no key on the board (mouse binds, print …) are left out instead of failing
+    for item in a.keys:
+        key, _, color = item.partition("=")
+        try:
+            slot = slot_of(key, a.layout)
+        except Fail:
+            if a.skip_unknown:
+                continue
+            raise
+        colors[slot] = parse_color(color, theme) if color else lit
     check_model(dev, a.force_model)
     block = frame_block(colors, base)
     if not dev.live:
@@ -841,8 +857,10 @@ def cmd_highlight(a, dev):
     for sig in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
         signal.signal(sig, lambda *_: stop.append(True))
     until = None if a.hold else time.monotonic() + a.seconds
+    # A --hold whose starter is gone (the shell crashed) would light the keys for ever
+    parent = os.getppid()
     try:
-        while not stop and (until is None or time.monotonic() < until):
+        while not stop and (until is None or time.monotonic() < until) and os.getppid() == parent:
             dev.write("live frame", CMD_FRAME, block, index=0, delay=0.007)
             for _ in range(10):
                 if stop or (until is not None and time.monotonic() >= until):
@@ -901,11 +919,14 @@ def main():
             s.add_argument("--all")
         else:
             s.add_argument("name", choices=["solid", "split", "rows"])
+            s.add_argument("--keep-effect", action="store_true",
+                           help="only store the colors unless self-define is the effect already")
         s.add_argument("-b", "--brightness", type=int, choices=range(10))
     s = sub.add_parser("highlight", parents=[common])
-    s.add_argument("keys", nargs="+")
+    s.add_argument("keys", nargs="+", help="key or key=color")
     s.add_argument("-c", "--color")
     s.add_argument("--base")
+    s.add_argument("--skip-unknown", action="store_true", help="leave out names that are no key on the board")
     g = s.add_mutually_exclusive_group()
     g.add_argument("--hold", action="store_true", help="until SIGTERM / Ctrl+C")
     g.add_argument("--seconds", type=float, default=3.0)

@@ -912,6 +912,27 @@ post_keyboard() {
   info "First test on the board: frame-keyboard list, then frame-keyboard info --live (docs/keyboard.md)"
 }
 
+# The keyboard app is live once keyboardLive is true in Config.qml (after the first test)
+keyboard_live() {
+  grep -qsE '^\s*readonly property bool keyboardLive: true' "$REPO/quickshell/.config/quickshell/config/Config.qml"
+}
+
+# New theme, new key colors. They are saved on the keyboard, so this only runs on a theme
+# change, and a board that shows another effect keeps it (--keep-effect)
+keyboard_theme() {
+  local bin="$HOME/.local/bin/frame-keyboard"
+  keyboard_connected && [[ -x $bin ]] || return 0
+  if ! keyboard_live; then
+    info "AULA F75: the keys take the theme colors once keyboardLive is true in Config.qml"
+    return 0
+  fi
+  if run_quiet "$bin" style split --keep-effect --live; then
+    ok "AULA F75 keys in the theme colors (they show with the self-define effect)"
+  else
+    warn "AULA F75: could not set the key colors, try: frame-keyboard style split --live"
+  fi
+}
+
 # ── Notification daemons ─────────────────────────────────────
 # Only one program can own the notification service on D-Bus. mako, dunst or
 # swaync would take the notifications away from the shell; so would noctalia, the shell
@@ -1549,6 +1570,7 @@ theme_reload() {
       zed) ok "Zed reloads its theme on its own" ;;
       dolphin) info "Dolphin: restart it for the new colors" ;;
       zen) info "Zen: restart it for the new colors" ;;
+      keyboard) keyboard_theme ;;
     esac
   done
   if command -v curl >/dev/null && [[ -n $(goxlr_serial) ]]; then
