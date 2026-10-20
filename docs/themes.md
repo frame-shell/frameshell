@@ -22,8 +22,15 @@ terminal colors (`ansi`) and the fonts. A new theme is one more JSON file with t
 
 `frame install` asks for a theme once. After `frame theme set …`, Quickshell, Zed and
 Hyprland's window borders change right away; Spotify gets the theme applied again; new
-Ghostty windows and new shells pick it up; Dolphin and Zen need a restart; GRUB needs
-`frame grub` (sudo).
+Ghostty windows and new shells pick it up; Dolphin, Zen and GTK apps need a restart; GRUB
+needs `frame grub`, the boot splash and the text consoles `frame boot` (both sudo).
+
+GTK apps (file dialogs, Nautilus, pavucontrol, anything with libadwaita) take their colors
+from `~/.config/gtk-4.0/gtk.css` and `gtk-3.0/gtk.css` (the `gtk` package): libadwaita's
+named colors set from the theme, square corners and thin borders, JetBrains Mono, dark.
+GTK 3 apps use the adw-gtk3 theme so the same names apply. Zen gets a start page in the
+theme too (`themes/templates/zen/startpage.html`): clock, date and a search that takes the
+launcher's shortcuts (`yt lofi`, `aw hyprland`); it is Zen's home page, new tabs stay Zen's own.
 
 ## How the files are made
 

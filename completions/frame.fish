@@ -5,7 +5,7 @@ function __frame_list
     frame __complete $argv 2>/dev/null
 end
 
-set -l commands install update remove backup restore theme grub goxlr login wallpaper spotify layout status help
+set -l commands install update remove backup restore theme grub boot goxlr login wallpaper spotify layout status help
 
 complete -c frame -f
 complete -c frame -s n -l dry-run -d "print what would happen, change nothing"
@@ -18,6 +18,7 @@ complete -c frame -n "not __fish_seen_subcommand_from $commands" -a backup -d "s
 complete -c frame -n "not __fish_seen_subcommand_from $commands" -a restore -d "list backups or put one back"
 complete -c frame -n "not __fish_seen_subcommand_from $commands" -a theme -d "list, set or check the theme"
 complete -c frame -n "not __fish_seen_subcommand_from $commands" -a grub -d "theme the GRUB boot menu"
+complete -c frame -n "not __fish_seen_subcommand_from $commands" -a boot -d "boot splash and console colors"
 complete -c frame -n "not __fish_seen_subcommand_from $commands" -a goxlr -d "GoXLR lights in the theme's colors"
 complete -c frame -n "not __fish_seen_subcommand_from $commands" -a login -d "the lockscreen look as the login screen"
 complete -c frame -n "not __fish_seen_subcommand_from $commands" -a wallpaper -d "wallpaper backends"
@@ -34,7 +35,7 @@ complete -c frame -n "__fish_seen_subcommand_from restore" -a "latest (__frame_l
 complete -c frame -n "__fish_seen_subcommand_from theme; and not __fish_seen_subcommand_from list ls set use pick check" -a "list set check" -d action
 complete -c frame -n "__fish_seen_subcommand_from theme; and not __fish_seen_subcommand_from list ls check" -a "(__frame_list themes)" -d theme
 
-complete -c frame -n "__fish_seen_subcommand_from grub login" -a "install remove"
+complete -c frame -n "__fish_seen_subcommand_from grub boot login" -a "install remove"
 complete -c frame -n "__fish_seen_subcommand_from layout" -a "tiling canvas"
 complete -c frame -n "__fish_seen_subcommand_from spotify" -a "login logout status"
 complete -c frame -n "__fish_seen_subcommand_from wallpaper; and not __fish_seen_subcommand_from list set option backend apply pause resume stop" -a "list set option backend apply pause resume stop"

@@ -114,6 +114,21 @@ The bar runs on every screen: workspaces (or the canvas minimap) and window titl
 middle, media, CPU load and temperature, RAM, volume and keyboard layout on the right.
 It flies up while the lockscreen takes over and drops back in after unlocking.
 
+Two things show up only when they matter: `● rec 0:42` while a screen recording runs
+(click stops it), and `↑ 12` when there are package updates (checkupdates and paru or
+yay, a minute after start and every 30 minutes; "(3 aur)" counts the AUR ones). A click
+on the number opens Ghostty with the update and `frame update` afterwards, and the count
+is checked again when that window closes.
+
+**Game mode** switches itself on while a game runs: Steam games (window class
+`steam_app_<id>`), gamescope, and the classes in `gameClasses` in `config/Config.qml`.
+It turns animations and blur off, sets the performance power profile, silences popups
+(calls and alarms still come through), pauses the wallpaper and, with `goxlrGameProfile`
+set, loads that GoXLR profile. When the last game closes, everything goes back, the
+GoXLR profile too. Switching it on by hand in the control center still works; a game
+does not turn off what you switched on yourself. `gameModeAuto: false` turns the
+automatic part off.
+
 Super+C (or the slider button in the bar) opens the control center:
 
 - **session:** user, uptime, lock, sleep, reboot, off (reboot and off need a second click)
@@ -225,6 +240,13 @@ screen right away. The picture goes to `~/Pictures/screenshots` (your XDG pictur
 folder, here `~/Bilder/screenshots`) and into the clipboard, and a notification shows it
 with "open", "folder" and "delete". grim takes the picture, wl-copy fills the clipboard
 (`screenshot/Screenshot.qml`, `qs ipc call screenshot region|screen`).
+
+Super+Shift+R records instead: the same picker in red, then wf-recorder records the region,
+window or screen until you press Super+Shift+R again or click `● rec` in the bar. The video
+goes to `~/Videos/recordings` (your XDG videos folder) as MP4; the notification offers
+"open", "folder", "copy" (the file itself, to paste into a chat) and "delete". Without
+sound by default; `recordAudio: true` in `config/Config.qml` records the default input
+(`services/Recorder.qml`, `qs ipc call screenshot record`).
 
 ## Lockscreen
 

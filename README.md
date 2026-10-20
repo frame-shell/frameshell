@@ -13,12 +13,14 @@ into its own shell.
 ## What's in it
 
 - A Quickshell shell: bar, control center with GoXLR faders and an app mixer, launcher,
-  lockscreen, notifications, OSD, screenshots and a wallpaper app
+  lockscreen, notifications, OSD, screenshots and recordings, a wallpaper app and a game
+  mode that switches itself on
 - Tiling with workspaces, or an infinite canvas where windows float on an endless plane
 - A launcher that does more than apps: Spotify, Discord DMs, timers and alarms,
   emoji, files, ssh, clipboard, web search and Claude
 - Bridges to Discord (calls, voice joins, messages), Steam (its popups land in the shell), the GoXLR and Spotify
-- Six themes for Ghostty, fish, Starship, Spotify, Vesktop, Steam, Zed, Dolphin, Zen, GRUB and the GoXLR's lights
+- Six themes for Ghostty, fish, Starship, Spotify, Vesktop, Steam, Zed, Dolphin, Zen, GTK apps,
+  GRUB, the boot splash, the text consoles and the GoXLR's lights
 - `frame`, one command to install, update and switch themes
 
 ## Install
@@ -46,6 +48,7 @@ connected GoXLR gets its utility on its own.
 | Super+K | keyboard: lighting, Fn keys, key colors (AULA F75, not tested on the board yet) |
 | Super+L | lock |
 | Print, Shift+Print | screenshot: region or window, whole screen |
+| Super+Shift+R | screen recording, again to stop |
 | Super+wheel | zoom out to every window (canvas layout) |
 | Super+E, Super+B, Super+Shift+E | Dolphin, Zen, Zed |
 | hold Super | all hotkeys on a keyboard map |

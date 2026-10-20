@@ -15,9 +15,13 @@ assets/
 /dolphin/.local/share/color-schemes/Frameshell.colors
 /zen/chrome/userChrome.css
 /zen/user.js
+/zen/startpage.html
 /grub/
 /steam/.local/share/Steam/millennium/themes/Frameshell/colors.css
 
 # Bridge token for the Spotify extension, written by `frame install spicetify`
 /spicetify/.config/spicetify/Extensions/frameshell-token.js
 /greeter/greeter.json
+/plymouth/
+/gtk/.config/gtk-3.0/gtk.css
+/gtk/.config/gtk-4.0/gtk.css

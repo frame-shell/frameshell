@@ -9,6 +9,7 @@
 #   frame theme [list|set <name>|check]
 #                                write every app color file from themes/<name>.json
 #   frame grub [install|remove]  theme the GRUB boot menu (copies to /boot, needs sudo)
+#   frame boot [install|remove]  boot splash (Plymouth) and text console colors in the theme
 #   frame goxlr                  light the GoXLR in the theme's colors (goxlr-utility)
 #   frame install keyboard       AULA F75: frame-keyboard, its udev rule (sudo) and the Super+K app
 #   frame login [install|remove] the lockscreen look as the login screen (greetd, needs sudo)
@@ -30,7 +31,7 @@ VENCORD_SRC="${XDG_DATA_HOME:-$HOME/.local/share}/frameshell/vencord"
 THEME_STATE="$STATE_DIR/theme"
 DEFAULT_THEME=periwinkle
 
-PACKAGES=(ghostty fish starship fastfetch spicetify vencord steam quickshell hypr wallpaper keyboard zed dolphin zen)
+PACKAGES=(ghostty fish starship fastfetch spicetify vencord steam quickshell hypr wallpaper keyboard gtk zed dolphin zen)
 
 # Distro packages each config needs; AUR ones go through paru/yay
 declare -A DEPS=(
@@ -45,13 +46,15 @@ declare -A DEPS=(
   [steam]="steam millennium ttf-jetbrains-mono jq"
   # Launcher modes: qt6-websockets (spotify), fd (files), cliphist (clipboard), wtype +
   # unicode-emoji + noto-fonts-emoji (emoji), sound-theme-freedesktop (timer and alarm sound)
-  [quickshell]="quickshell ttf-jetbrains-mono ttf-jetbrains-mono-nerd wl-clipboard libpulse pciutils qt6-websockets qt6-imageformats fd cliphist wtype unicode-emoji noto-fonts-emoji sound-theme-freedesktop"
+  [quickshell]="quickshell ttf-jetbrains-mono ttf-jetbrains-mono-nerd wl-clipboard libpulse pciutils qt6-websockets qt6-imageformats pacman-contrib wf-recorder fd cliphist wtype unicode-emoji noto-fonts-emoji sound-theme-freedesktop"
   [hypr]="hypridle"
   # ffmpeg makes the video thumbnails in the wallpaper app; linux-wallpaperengine
   # comes on top when the "both" backend is picked
   [wallpaper]="jq swaybg mpvpaper ffmpeg"
   # frame-keyboard talks to the AULA F75 over hidraw with nothing but Python
   [keyboard]="python"
+  # adw-gtk-theme: GTK 3 apps in the libadwaita look, so one gtk.css colors both
+  [gtk]="adw-gtk-theme breeze-icons ttf-jetbrains-mono"
   [zed]="zed ttf-jetbrains-mono"
   # kio-extras: sftp:// and thumbnails; konsole: the F4 terminal panel;
   # archlinux-xdg-menu: the "Open with" list outside Plasma
@@ -269,6 +272,7 @@ usage() {
     theme set [name]      switch every app to another theme (no name: pick one with the arrow keys)
     theme check           only report files that are out of date
     grub [install|remove] theme the GRUB boot menu (copies to /boot, needs sudo)
+    boot [install|remove] boot splash (Plymouth) and console colors in the theme (needs sudo)
     goxlr                 faders, buttons and animation of the GoXLR in the theme's colors
     login [install|remove] the lockscreen look as the login screen (greetd greeter, needs sudo)
     wallpaper <…>         wallpaper backends, e.g. "frame wallpaper backend mpv"
@@ -513,7 +517,7 @@ link_completions() {
 # Lists for the completions: frame __complete commands|packages|installed|themes|backups
 cmd_complete() {
   case ${1:-} in
-    commands) printf '%s\n' install update remove backup restore theme grub goxlr login wallpaper spotify layout status help ;;
+    commands) printf '%s\n' install update remove backup restore theme grub boot goxlr login wallpaper spotify layout status help ;;
     packages) printf '%s\n' "${PACKAGES[@]}" ;;
     installed) installed_packages ;;
     themes) theme_ids ;;
@@ -789,6 +793,24 @@ post_zed() {
 
 # Outside Plasma, Dolphin takes its colors from its own color scheme setting and the
 # rest of the Qt look (style, fonts, icons) from qt6ct
+# libadwaita apps take dark or light from the portal setting, not from settings.ini;
+# GTK 3 apps need the adw-gtk3 theme picked here too
+post_gtk() {
+  if command -v gsettings >/dev/null || ((DRY_RUN)); then
+    run_quiet gsettings set org.gnome.desktop.interface color-scheme prefer-dark || true
+    run_quiet gsettings set org.gnome.desktop.interface font-name "JetBrains Mono 10" || true
+    run_quiet gsettings set org.gnome.desktop.interface monospace-font-name "JetBrains Mono 10" || true
+    if [[ -d /usr/share/themes/adw-gtk3-dark ]] || ((DRY_RUN)); then
+      run_quiet gsettings set org.gnome.desktop.interface gtk-theme adw-gtk3-dark || true
+    fi
+    ok "GTK apps: dark, JetBrains Mono, the theme's colors"
+  else
+    info "gsettings not found; GTK 4 apps may stay light until color-scheme is prefer-dark"
+  fi
+  info "Open GTK apps pick the colors up when they restart"
+  return 0
+}
+
 post_dolphin() {
   local qt="$HOME/.config/qt6ct/qt6ct.conf"
   # QFont string as qt6ct writes it; qt6ct rewrites it in its own format when saved
@@ -831,6 +853,13 @@ post_zen() {
     return 0
   fi
   info "Profile: ${profile/#"$HOME"/\~}"
+  # The start page lives at a fixed place, so the home page pref does not depend on the profile
+  local page="${XDG_DATA_HOME:-$HOME/.local/share}/frameshell/startpage.html"
+  if [[ "$(readlink -f "$page" 2>/dev/null)" != "$REPO/zen/startpage.html" ]]; then
+    run mkdir -p "$(dirname "$page")"
+    run ln -sf "$REPO/zen/startpage.html" "$page"
+    ok "Start page: ${page/#"$HOME"/\~} (Zen's home page)"
+  fi
   if command -v pgrep >/dev/null && pgrep -x zen-bin >/dev/null; then
     info "Zen is running; restart it to load the theme"
   fi
@@ -1336,6 +1365,154 @@ cmd_login() {
   esac
 }
 
+# ── Boot: splash and console colors ─────────────────────────
+# The rest of the boot chain in the theme: Plymouth (between GRUB and the login screen,
+# also asks for the disk password) and the text consoles' 16 colors, which show when
+# something goes wrong before the desktop. Both need sudo.
+PLYMOUTH_DIR="/usr/share/plymouth/themes/frameshell"
+VTRGB_FILE="/etc/frameshell/vtrgb"
+VTRGB_UNIT="/etc/systemd/system/frameshell-vtrgb.service"
+
+# The theme's ansi colors as setvtrgb wants them: one line each for red, green and blue,
+# 16 decimal values; color 0 is the console background, so it gets the theme's bg
+vt_palette() {
+  local i h r=() g=() b=()
+  for ((i = 0; i < 16; i++)); do
+    h=${PALETTE[ansi.$i]:-}
+    ((i == 0)) && h=${PALETTE[colors.bg]}
+    h=${h#\#}
+    r+=($((16#${h:0:2})))
+    g+=($((16#${h:2:2})))
+    b+=($((16#${h:4:2})))
+  done
+  local IFS=,
+  printf '%s\n%s\n%s\n' "${r[*]}" "${g[*]}" "${b[*]}"
+}
+
+# mkinitcpio on CachyOS, dracut on some installs: the splash lives in the initramfs
+rebuild_initramfs() {
+  if command -v mkinitcpio >/dev/null; then
+    run sudo mkinitcpio -P
+  elif command -v dracut >/dev/null; then
+    run sudo dracut --regenerate-all --force
+  else
+    warn "Neither mkinitcpio nor dracut found; rebuild the initramfs yourself"
+    return 1
+  fi
+}
+
+boot_splash_install() {
+  step "Boot splash (Plymouth)"
+  if ! command -v plymouth-set-default-theme >/dev/null && ((!DRY_RUN)); then
+    warn "Plymouth is not installed (pacman -S plymouth), skipping the splash"
+    return 0
+  fi
+  local theme tmp f
+  theme=$(current_theme)
+  [[ -f $REPO/plymouth/frameshell/frameshell.script ]] || theme_render "$theme" 0 quiet
+  tmp=$(mktemp -d)
+  png_solid "$tmp/line.png" 1 "$(theme_hex "$theme" frame)"
+  png_solid "$tmp/fill.png" 1 "$(theme_hex "$theme" primary)"
+  png_solid "$tmp/track.png" 1 "$(theme_hex "$theme" surface2)"
+  png_solid "$tmp/bg.png" 1 "$(theme_hex "$theme" bg)"
+  run sudo install -d "$PLYMOUTH_DIR"
+  for f in frameshell.plymouth frameshell.script; do
+    run sudo install -m 644 "$REPO/plymouth/frameshell/$f" "$PLYMOUTH_DIR/$f"
+  done
+  run sudo install -m 644 "$tmp"/*.png "$PLYMOUTH_DIR/"
+  rm -rf "$tmp"
+  ok "Theme in $PLYMOUTH_DIR"
+
+  # The theme it replaces, for frame boot remove
+  if [[ ! -f $STATE_DIR/plymouth-theme.orig ]] && ((!DRY_RUN)); then
+    local before
+    before=$(plymouth-set-default-theme 2>/dev/null || true)
+    if [[ -n $before && $before != frameshell ]]; then
+      mkdir -p "$STATE_DIR"
+      echo "$before" >"$STATE_DIR/plymouth-theme.orig"
+    fi
+  fi
+  run sudo plymouth-set-default-theme frameshell
+  ok "Plymouth uses frameshell"
+
+  # Without the hook or the splash parameter nothing shows, whatever the theme
+  if [[ -f /etc/mkinitcpio.conf ]] && ! grep -qs plymouth /etc/mkinitcpio.conf /etc/mkinitcpio.conf.d/* 2>/dev/null; then
+    warn "mkinitcpio has no plymouth hook; add plymouth to HOOKS in /etc/mkinitcpio.conf (after udev)"
+  fi
+  grep -qw splash /proc/cmdline 2>/dev/null \
+    || warn "The kernel command line has no splash parameter; add splash (and quiet) in your boot loader's config"
+  info "Rebuilding the initramfs, the splash is part of it (takes a minute)"
+  rebuild_initramfs && ok "initramfs rebuilt"
+}
+
+boot_tty_install() {
+  step "Console colors"
+  if ! command -v setvtrgb >/dev/null && ((!DRY_RUN)); then
+    warn "setvtrgb not found (pacman -S kbd), skipping the console colors"
+    return 0
+  fi
+  local tmp
+  tmp=$(mktemp)
+  load_palette "$(current_theme)"
+  vt_palette >"$tmp"
+  run sudo install -d /etc/frameshell
+  run sudo install -m 644 "$tmp" "$VTRGB_FILE"
+  # Before the login screen, so a text console never shows the old colors
+  cat >"$tmp" <<EOF
+[Unit]
+Description=frameshell colors for the text consoles
+DefaultDependencies=no
+After=systemd-vconsole-setup.service
+Before=display-manager.service getty.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/setvtrgb $VTRGB_FILE
+
+[Install]
+WantedBy=sysinit.target
+EOF
+  run sudo install -m 644 "$tmp" "$VTRGB_UNIT"
+  rm -f "$tmp"
+  run sudo systemctl daemon-reload
+  run sudo systemctl enable frameshell-vtrgb.service
+  run_quiet sudo setvtrgb "$VTRGB_FILE" || true
+  ok "Text consoles use the theme's colors (Ctrl+Alt+F3 to look)"
+}
+
+# frame boot [install|remove]: Plymouth splash and console colors in the theme
+cmd_boot() {
+  local action=${1:-install}
+  need_arch
+  header
+  case $action in
+    install)
+      info "Puts the frameshell splash ($(current_theme)) into Plymouth and the theme's colors on the text consoles (needs sudo)"
+      confirm "Set up the boot splash and console colors?" || exit 0
+      boot_splash_install
+      boot_tty_install
+      printf '\n%sDone.%s Reboot to see the splash.\n\n' "$c_ok" "$c_reset"
+      ;;
+    remove)
+      confirm "Back to the distro's splash and the default console colors?" || exit 0
+      step "Boot splash"
+      if command -v plymouth-set-default-theme >/dev/null; then
+        local before=""
+        [[ -f $STATE_DIR/plymouth-theme.orig ]] && before=$(<"$STATE_DIR/plymouth-theme.orig")
+        run sudo plymouth-set-default-theme "${before:-bgrt}"
+        run sudo rm -rf "$PLYMOUTH_DIR"
+        rebuild_initramfs && ok "Splash back to ${before:-bgrt}"
+      fi
+      step "Console colors"
+      run_quiet sudo systemctl disable frameshell-vtrgb.service || true
+      run sudo rm -f "$VTRGB_UNIT" "$VTRGB_FILE"
+      run_quiet sudo setvtrgb vga || true
+      ok "Default console colors"
+      ;;
+    *) die "Unknown boot action: $action (install or remove)" ;;
+  esac
+}
+
 cmd_grub() {
   local action=${1:-install}
   need_arch
@@ -1416,6 +1593,8 @@ load_palette() {
   done < <(jq -r 'paths(scalars) as $p | "\($p | map(tostring) | join("."))=\(getpath($p))"' "$REPO/themes/$id.json")
   [[ -n ${PALETTE[colors.primary]:-} ]] || die "themes/$id.json has no colors.primary"
   PALETTE[id]=$id
+  # For templates that need a real path, e.g. Zen's home page ({{home}})
+  PALETTE[home]=$HOME
 }
 
 # mix_hex <#a> <#b> <percent>: a with percent of b mixed in
@@ -1567,6 +1746,7 @@ theme_reload() {
       ghostty) info "Ghostty: new windows use the theme, open ones reload with Ctrl+Shift+," ;;
       fish) info "fish and Starship: new shells use the theme" ;;
       vencord) info "Vesktop: reload with Ctrl+R if the colors did not change on their own" ;;
+      gtk) info "GTK apps (file dialogs, Nautilus, pavucontrol): restart them for the new colors" ;;
       zed) ok "Zed reloads its theme on its own" ;;
       dolphin) info "Dolphin: restart it for the new colors" ;;
       zen) info "Zen: restart it for the new colors" ;;
@@ -1578,6 +1758,9 @@ theme_reload() {
   fi
   if [[ -d $GRUB_THEME_DIR ]]; then
     info "Boot menu: run frame grub to give GRUB the new colors (needs sudo)"
+  fi
+  if [[ -d $PLYMOUTH_DIR || -f $VTRGB_FILE ]]; then
+    info "Boot splash and consoles: run frame boot for the new colors (needs sudo, rebuilds the initramfs)"
   fi
   # The login screen keeps its own copy of the theme in /usr/share
   if [[ -d $GREETER_DIR ]] && ((!DRY_RUN)); then
@@ -1762,7 +1945,7 @@ cmd_spotify() {
 # ── Setup ────────────────────────────────────────────────────
 
 # Always part of frameshell; the rest is asked in the setup
-CORE_PACKAGES=(ghostty fish starship fastfetch quickshell hypr wallpaper)
+CORE_PACKAGES=(ghostty fish starship fastfetch quickshell hypr wallpaper gtk)
 OPTIONAL_PACKAGES=(
   "spicetify|Spotify, themed, with search and controls in the launcher"
   "vencord|Vesktop (Discord), themed, with calls and DMs in the shell"
@@ -2203,6 +2386,7 @@ main() {
     grub) cmd_grub "${args[@]}" ;;
     goxlr) cmd_goxlr "${args[@]}" ;;
     login) cmd_login "${args[@]}" ;;
+    boot) cmd_boot "${args[@]}" ;;
     theme) cmd_theme "${args[@]}" ;;
     wallpaper | wp) cmd_wallpaper "${args[@]}" ;;
     spotify) cmd_spotify "${args[@]}" ;;

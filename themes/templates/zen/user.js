@@ -10,5 +10,10 @@ user_pref("zen.view.window.scheme", 0);
 user_pref("zen.theme.border-radius", 0);
 user_pref("zen.theme.content-element-separation", 8);
 
+// The frameshell start page (themes/templates/zen/startpage.html) as the home page and on
+// start; frame install zen links it to ~/.local/share/frameshell/startpage.html
+user_pref("browser.startup.homepage", "file://{{home}}/.local/share/frameshell/startpage.html");
+user_pref("browser.startup.page", 1);
+
 user_pref("zen.welcome-screen.seen", true);
 user_pref("zen.watermark.enabled", false);

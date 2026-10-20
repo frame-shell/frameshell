@@ -38,6 +38,8 @@ frame theme list             # themes; frame theme set <name> switches
 frame theme set              # without a name: pick one with the arrow keys
 frame grub                   # theme the GRUB boot menu (sudo)
 frame grub remove            # switch it off again
+frame boot                   # boot splash (Plymouth) and text console colors (sudo)
+frame boot remove            # the distro's splash and default console colors again
 frame login                  # the lockscreen look as the login screen (greetd, sudo)
 frame login remove           # back to the greeter
 frame wallpaper backend mpv  # wallpaper backend: both, mpv or image
@@ -63,6 +65,17 @@ Trying it without a reboot: switch to a text console (Ctrl+Alt+F3), log in and r
 `sudo systemctl restart greetd`. The greeter logs to the journal
 (`journalctl -b -t frame-greeter -u greetd`). To look at it inside a running desktop:
 `qs -p ~/frameshell/greeter`.
+
+`frame boot` puts the rest of the boot in the theme. Plymouth, the splash between the boot
+menu and the login screen (it also asks for the disk password with LUKS), gets a frame
+with the wordmark, a progress line and a status line, drawn from
+`themes/templates/plymouth/` in the active theme; the initramfs is rebuilt afterwards
+(mkinitcpio or dracut), since the splash lives in it. It needs the `plymouth` hook in
+`/etc/mkinitcpio.conf` and `splash` on the kernel command line (CachyOS has both) and says
+so when one is missing. The text consoles (Ctrl+Alt+F3, also what you see when the
+graphical login fails) get the theme's 16 colors through `setvtrgb` and a small service,
+`frameshell-vtrgb`, that sets them before the login screen. After `frame theme set`, run
+`frame boot` again for the new colors.
 
 `frame grub` only works when the system boots with GRUB (`/boot/grub/grub.cfg` exists;
 the CachyOS installer also offers systemd-boot and Limine). It builds the fonts from
