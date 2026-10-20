@@ -32,10 +32,10 @@ Super+Space (or `qs ipc call launcher toggle`) opens the launcher on the focused
 | `d reply on my way` | DM to the person you last wrote to |
 | `t 5m tea`, `t 1:30`, `t 25` | timer (a bare number is minutes); `t` lists running ones, Enter stops one |
 | `a laundry 10:00 m-f` | alarm, see below; `a` lists them |
-| `# heart` | emoji, Enter copies, Shift+Enter types it into the window behind |
-| `/ notes`, `/ dev notes` | files and folders in your home (fd), words before the last narrow the path; Enter opens, Shift+Enter opens a terminal there |
+| `# heart` | emoji, Enter copies, Shift+Enter pastes it into the window behind (it lands in the clipboard too) |
+| `/ notes`, `/ dev notes` | files and folders in your home (find, hidden and build folders skipped), words before the last narrow the path; Enter opens, Shift+Enter opens a terminal there |
 | `ssh nas` | hosts from `~/.ssh/config`, or any `user@host`; opens in Ghostty |
-| `; token` | clipboard history (cliphist), Enter copies, Shift+Enter deletes the entry; Super+V opens straight into it |
+| `; token` | clipboard history (frame-clip, the newest 100 copies), Enter copies, Shift+Enter deletes the entry; Super+V opens straight into it |
 | `? yt lofi`, `? aw hyprland` | web search: `g` `ddg` `yt` `gh` `aw` `aur` `w` `r`, without a shortcut DuckDuckGo |
 | `c what is a tarball` | short answer from Claude (`claude -p`), only sent on Enter; Enter again copies it |
 
@@ -115,8 +115,9 @@ middle, media, CPU load and temperature, RAM, volume and keyboard layout on the 
 It flies up while the lockscreen takes over and drops back in after unlocking.
 
 Two things show up only when they matter: `● rec 0:42` while a screen recording runs
-(click stops it), and `↑ 12` when there are package updates (checkupdates and paru or
-yay, a minute after start and every 30 minutes; "(3 aur)" counts the AUR ones). A click
+(click stops it), and `↑ 12` when there are package updates (pacman against a copy of its
+databases in /tmp, and paru or yay, a minute after start and every 30 minutes; "(3 aur)"
+counts the AUR ones). A click
 on the number opens Ghostty with the update and `frame update` afterwards, and the count
 is checked again when that window closes.
 
@@ -169,8 +170,8 @@ Hyprland also runs at login (`frame-wallpaper apply`).
 
 | Backend | Shows |
 |---|---|
-| `both` | Wallpaper Engine scenes and videos from the Workshop (linux-wallpaperengine), plus videos (mpvpaper) and images (swaybg) from the folders |
-| `mpv` | only the folders: videos through mpvpaper, images through swaybg |
+| `both` | Wallpaper Engine scenes and videos from the Workshop (linux-wallpaperengine), plus videos (mpvpaper) and images (drawn by the shell) from the folders |
+| `mpv` | only the folders: videos through mpvpaper, images drawn by the shell |
 | `image` | only still images, lowest power use |
 
 Folders: `~/Pictures/wallpapers` and `assets/wallpapers`; Workshop items come from
@@ -250,7 +251,7 @@ sound by default; `recordAudio: true` in `config/Config.qml` records the default
 
 ## Lockscreen
 
-Super+L (or `qs ipc call lock lock`, or hypridle after 10 minutes) takes a snapshot of
+Super+L (or `qs ipc call lock lock`, or 10 idle minutes, or going to sleep) takes a snapshot of
 every screen, locks the session and blurs that snapshot behind the clock, password field,
 weather panel, media controls and keyboard status. The login only shows on the screen
 you were on; the others show the blur. Unlocking plays the animation backwards. The

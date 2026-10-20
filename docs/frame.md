@@ -90,6 +90,19 @@ they fall back to plain numbered questions. Tab completes commands, packages, th
 backups in fish and bash (`completions/`, linked by `frame install` and `frame update`;
 bash needs the bash-completion package).
 
+frameshell keeps its own footprint small: what the shell can do itself (idle lock, still
+wallpapers, clipboard history, file search, the update check, the emoji list and the alarm
+sound) needs no package, the icons come from the Nerd Font symbols alone, and the Vencord
+build tools are deleted again after the build. Extras a package works without (Dolphin's
+terminal panel and PDF previews) are asked for during `frame install`, default no.
+
+`frame clean` frees what piles up: the pacman cache (installed versions stay), the
+paru/yay build cache, the pnpm store, orphaned packages, frame backups but the newest 3,
+the system journal down to 100 MB and the file thumbnails. It also offers to remove the
+packages earlier versions of frameshell installed and that nothing needs any more
+(hypridle, swaybg, cliphist, fd, wtype, the full JetBrains Mono Nerd Font, …). Every item
+shows its size and asks first.
+
 Backups live in `~/.local/state/frameshell/backup/` (one folder per snapshot, named by date
 and reason). `install` moves conflicting configs there, `update` and `restore` take a
 snapshot before they change anything. `update` also updates the `frame` CLI itself.
@@ -106,14 +119,15 @@ Manual steps:
 - **Vesktop:** start it once, then close it before `frame install vencord` so the theme can be
   switched on automatically (otherwise: Settings → Themes → Frameshell).
 - **Font:** JetBrains Mono everywhere (TUI look); `frame` installs `ttf-jetbrains-mono`
-  and the Nerd Font build for icons.
+  and the Nerd Font symbols alone for icons (`ttf-nerd-fonts-symbols-mono`, a few MB instead
+  of the whole patched family).
 - **Hyprland:** frameshell's Hyprland files are Lua (Hyprland 0.55+, which reads
   `hyprland.lua` before the old `hyprland.conf`). `frame install hypr` adds
   `require("frame/shell")` to your own `hyprland.lua` (backed up first). Still on
   `hyprland.conf`? Move your settings to `hyprland.lua` first; Hyprland's
   [example config](https://github.com/hyprwm/Hyprland/blob/main/example/hyprland.lua) is a
   good start. Remove older SUPER+L, SUPER+SPACE, SUPER+C, SUPER+W, SUPER+E or SUPER+B
-  binds or a second `hl.exec_cmd("hypridle")` if your config has them. `frame/shell.lua`
+  binds, or `hl.exec_cmd("hypridle")` if your config has it (the shell locks on idle itself). `frame/shell.lua`
   also loads `frame/colors.lua` (window borders in the theme colors); drop that line to
   keep your own.
 - **Weather:** set your city in `quickshell/.config/quickshell/config/Config.qml`
@@ -136,7 +150,7 @@ Not covered by `frame` yet: Hyprland itself.
 frameshell/
 ├── frame              # CLI: install, update, remove, backup, restore, theme, grub, login, wallpaper, status
 ├── themes/            # periwinkle.json, sakura.json, … and templates/ for frame theme
-├── hypr/              # frame/shell.lua (keybinds, autostart), apps.lua, hotkeys.lua, hypridle.conf
+├── hypr/              # frame/shell.lua (keybinds, autostart), apps.lua, hotkeys.lua, canvas.lua
 ├── quickshell/.config/quickshell/
 │   ├── shell.qml      # Entry point
 │   ├── config/        # Theme.qml (generated), Config.qml (your settings)

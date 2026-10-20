@@ -28,7 +28,7 @@ needs `frame grub`, the boot splash and the text consoles `frame boot` (both sud
 GTK apps (file dialogs, Nautilus, pavucontrol, anything with libadwaita) take their colors
 from `~/.config/gtk-4.0/gtk.css` and `gtk-3.0/gtk.css` (the `gtk` package): libadwaita's
 named colors set from the theme, square corners and thin borders, JetBrains Mono, dark.
-GTK 3 apps use the adw-gtk3 theme so the same names apply. Zen gets a start page in the
+GTK 3 apps use the adw-gtk3 theme when `adw-gtk-theme` is installed, so the same names apply. Zen gets a start page in the
 theme too (`themes/templates/zen/startpage.html`): clock, date and a search that takes the
 launcher's shortcuts (`yt lofi`, `aw hyprland`); it is Zen's home page, new tabs stay Zen's own.
 

@@ -5,7 +5,7 @@ function __frame_list
     frame __complete $argv 2>/dev/null
 end
 
-set -l commands install update remove backup restore theme grub boot goxlr login wallpaper spotify layout status help
+set -l commands install update remove backup restore theme grub boot goxlr login wallpaper spotify layout status clean help
 
 complete -c frame -f
 complete -c frame -s n -l dry-run -d "print what would happen, change nothing"
@@ -25,6 +25,7 @@ complete -c frame -n "not __fish_seen_subcommand_from $commands" -a wallpaper -d
 complete -c frame -n "not __fish_seen_subcommand_from $commands" -a spotify -d "Spotify Web API for the launcher"
 complete -c frame -n "not __fish_seen_subcommand_from $commands" -a layout -d "tiling or the infinite canvas"
 complete -c frame -n "not __fish_seen_subcommand_from $commands" -a status -d "what is linked and what is missing"
+complete -c frame -n "not __fish_seen_subcommand_from $commands" -a clean -d "free disk space"
 complete -c frame -n "not __fish_seen_subcommand_from $commands" -a help -d "all commands"
 
 complete -c frame -n "__fish_seen_subcommand_from install update backup" -a "(__frame_list packages)"

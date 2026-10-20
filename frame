@@ -17,6 +17,7 @@
 #   frame spotify <args…>        passed to frame-spotify (login, logout, status)
 #   frame layout [tiling|canvas] Hyprland tiling or the infinite canvas
 #   frame status                 show what is linked and what is missing
+#   frame clean                  free disk space: caches, orphans, old backups, logs
 #
 # Options: -n/--dry-run (print what would happen), -y/--yes (no questions)
 
@@ -44,22 +45,31 @@ declare -A DEPS=(
   [vencord]="vesktop ttf-jetbrains-mono jq git nodejs pnpm"
   # millennium (AUR) themes Steam and runs the plugin that sends its notifications to the shell
   [steam]="steam millennium ttf-jetbrains-mono jq"
-  # Launcher modes: qt6-websockets (spotify), fd (files), cliphist (clipboard), wtype +
-  # unicode-emoji + noto-fonts-emoji (emoji), sound-theme-freedesktop (timer and alarm sound)
-  [quickshell]="quickshell ttf-jetbrains-mono ttf-jetbrains-mono-nerd wl-clipboard libpulse pciutils qt6-websockets qt6-imageformats pacman-contrib wf-recorder fd cliphist wtype unicode-emoji noto-fonts-emoji sound-theme-freedesktop"
-  [hypr]="hypridle"
+  # qt6-websockets: the Spotify bridge; wf-recorder: screen recordings; noto-fonts-emoji: the
+  # launcher's emoji (the list itself, the alarm sound, file search, clipboard history and the
+  # update check are the shell's own)
+  [quickshell]="quickshell ttf-jetbrains-mono ttf-nerd-fonts-symbols-mono wl-clipboard libpulse pciutils qt6-websockets qt6-imageformats wf-recorder noto-fonts-emoji"
+  # Idle lock and screen off live in the shell (lockscreen/Lock.qml), no hypridle
+  [hypr]=""
   # ffmpeg makes the video thumbnails in the wallpaper app; linux-wallpaperengine
   # comes on top when the "both" backend is picked
-  [wallpaper]="jq swaybg mpvpaper ffmpeg"
+  [wallpaper]="jq mpvpaper ffmpeg"
   # frame-keyboard talks to the AULA F75 over hidraw with nothing but Python
   [keyboard]="python"
-  # adw-gtk-theme: GTK 3 apps in the libadwaita look, so one gtk.css colors both
-  [gtk]="adw-gtk-theme breeze-icons ttf-jetbrains-mono"
+  # adw-gtk-theme (GTK 3 apps in the libadwaita look) is used when it is there, not required
+  [gtk]="ttf-jetbrains-mono"
   [zed]="zed ttf-jetbrains-mono"
-  # kio-extras: sftp:// and thumbnails; konsole: the F4 terminal panel;
+  # kio-extras: sftp:// and thumbnails; konsole and kdegraphics-thumbnailers are asked for
+  # (OPTIONAL_DEPS below);
   # archlinux-xdg-menu: the "Open with" list outside Plasma
-  [dolphin]="dolphin kio-extras ffmpegthumbs kdegraphics-thumbnailers konsole qt6ct archlinux-xdg-menu breeze-icons ttf-jetbrains-mono"
+  [dolphin]="dolphin kio-extras ffmpegthumbs qt6ct archlinux-xdg-menu breeze-icons ttf-jetbrains-mono"
   [zen]="zen-browser-bin ttf-jetbrains-mono"
+)
+
+# Extras a package works without, asked for during install (default no, -y skips them):
+# "package|what it gives you" entries, separated by ";"
+declare -A OPTIONAL_DEPS=(
+  [dolphin]="konsole|the terminal panel inside Dolphin (F4);kdegraphics-thumbnailers|previews of PDFs and RAW photos"
 )
 
 # App files outside the repo that frame touches or that belong in a backup
@@ -145,6 +155,32 @@ run_quiet() {
     return 0
   fi
   "$@" >/dev/null 2>&1
+}
+
+# Like confirm, but no unless the answer is yes; -y counts as no (nothing extra unasked)
+confirm_extra() {
+  ((ASSUME_YES)) && return 1
+  local answer=""
+  printf '  %s [y/N] ' "$1"
+  read -r answer || true
+  [[ -t 0 ]] || printf '%s\n' "${answer:-n}"
+  [[ $answer =~ ^[YyJj] ]]
+}
+
+# The optional extras of these packages that the user wants and that are not there yet
+optional_deps_of() {
+  local p entry pkg
+  for p in "$@"; do
+    [[ -n ${OPTIONAL_DEPS[$p]:-} ]] || continue
+    # The list on fd 3, so the question still reads its answer from the terminal
+    while IFS= read -r -d ';' -u 3 entry || [[ -n $entry ]]; do
+      entry=${entry%$'\n'}
+      pkg=${entry%%|*}
+      has_pkg "$pkg" && continue
+      confirm_extra "$p: also ${entry#*|} ($pkg)?" >&2 && echo "$pkg"
+    done 3<<<"${OPTIONAL_DEPS[$p]}"
+  done
+  return 0
 }
 
 confirm() {
@@ -281,6 +317,7 @@ usage() {
     spotify status        logged in or not; "spotify logout" forgets the tokens
     layout [tiling|canvas] normal tiling or the infinite canvas (windows on an endless plane)
     status                show what is linked and what is missing
+    clean                 free disk space: package caches, orphans, old backups, logs
 
   ${c_bold}Options${c_reset}
     -n, --dry-run         print what would happen, change nothing
@@ -517,7 +554,7 @@ link_completions() {
 # Lists for the completions: frame __complete commands|packages|installed|themes|backups
 cmd_complete() {
   case ${1:-} in
-    commands) printf '%s\n' install update remove backup restore theme grub boot goxlr login wallpaper spotify layout status help ;;
+    commands) printf '%s\n' install update remove backup restore theme grub boot goxlr login wallpaper spotify layout status clean help ;;
     packages) printf '%s\n' "${PACKAGES[@]}" ;;
     installed) installed_packages ;;
     themes) theme_ids ;;
@@ -641,6 +678,11 @@ vencord_build() {
       echo "$wanted" >"$marker"
     fi
     ok "Vencord built with ShellBridge"
+    # Vesktop only loads dist/; the build tools are several hundred MB and come back with
+    # the next build that needs them
+    run rm -rf "$VENCORD_SRC/node_modules"
+    run_quiet pnpm store prune || true
+    ok "Build tools removed again (dist/ stays)"
   else
     warn "Vencord build failed, Vesktop keeps its own Vencord (the theme still works)"
     return 1
@@ -1063,7 +1105,7 @@ post_hypr() {
     warn "hyprland.lua also binds ${dupes[*]}; frame binds them too, remove your lines to avoid doubles"
   fi
   if grep -qE 'exec_cmd\("hypridle' "$lua"; then
-    warn "hyprland.lua starts hypridle too; remove that line, frame/shell.lua starts it"
+    warn "hyprland.lua starts hypridle; the shell locks on idle by itself now, remove that line (or it locks twice)"
   fi
   if command -v hyprctl >/dev/null && ((!DRY_RUN)); then
     hyprctl reload >/dev/null && ok "Hyprland reloaded"
@@ -2110,7 +2152,9 @@ cmd_install() {
 
   step "Dependencies"
   mapfile -t deps < <(deps_of "${pkgs[@]}")
-  install_deps stow jq "${deps[@]}" "${extra[@]}"
+  local optional=()
+  mapfile -t optional < <(optional_deps_of "${pkgs[@]}")
+  install_deps stow jq "${deps[@]}" "${extra[@]}" "${optional[@]}"
   [[ -n $PICKED_LAYOUT ]] && save_layout "$PICKED_LAYOUT"
 
   # The color files are generated, so they exist before anything is linked
@@ -2265,6 +2309,101 @@ cmd_restore() {
   info "Restored files are plain copies. To link a package again: frame install <package>"
 }
 
+# ── Clean ────────────────────────────────────────────────────
+# Packages frameshell needed once and does not any more (its own code does the job now);
+# frame clean offers them for removal when nothing else depends on them
+RETIRED_PACKAGES=(ttf-jetbrains-mono-nerd hypridle swaybg cliphist fd wtype unicode-emoji sound-theme-freedesktop pacman-contrib)
+FREED=0
+
+dir_bytes() {
+  du -sb "$@" 2>/dev/null | awk '{ s += $1 } END { print s + 0 }'
+}
+
+human_bytes() {
+  numfmt --to=iec --suffix=B "$1" 2>/dev/null || echo "$1 bytes"
+}
+
+# Installed size of packages, from pacman's "Installed Size : 12.34 MiB"
+pkg_bytes() {
+  (($#)) || { echo 0; return; }
+  LC_ALL=C pacman -Qi "$@" 2>/dev/null | awk -F': *' '
+    /^Installed Size/ {
+      split($2, p, " "); n = p[1]; u = p[2]
+      f = (u == "KiB") ? 1024 : (u == "MiB") ? 1048576 : (u == "GiB") ? 1073741824 : 1
+      s += n * f
+    }
+    END { printf "%d\n", s }'
+}
+
+# clean_item <label> <bytes> <command…>: asks with the size, runs it, counts what it freed
+clean_item() {
+  local label=$1 bytes=$2
+  shift 2
+  ((bytes > 0)) || return 0
+  if confirm "$label ($(human_bytes "$bytes"))?"; then
+    run "$@" && FREED=$((FREED + bytes))
+  fi
+  return 0
+}
+
+# frame clean: shows what takes space for nothing and frees it, one question per item
+cmd_clean() {
+  need_arch
+  header
+  FREED=0
+
+  step "Package caches"
+  local cache=/var/cache/pacman/pkg
+  # pacman keeps every version it ever downloaded; -Sc keeps the installed ones
+  [[ -d $cache ]] && clean_item "pacman cache, the installed versions stay; up to" "$(dir_bytes "$cache")" sudo pacman -Sc --noconfirm
+  local d
+  for d in "$HOME/.cache/paru" "$HOME/.cache/yay"; do
+    [[ -d $d ]] && clean_item "AUR build cache ${d/#"$HOME"/\~}" "$(dir_bytes "$d")" rm -rf "$d"
+  done
+  local store="${XDG_DATA_HOME:-$HOME/.local/share}/pnpm/store"
+  [[ -d $store ]] && command -v pnpm >/dev/null && clean_item "pnpm store (Vencord build tools); up to" "$(dir_bytes "$store")" pnpm store prune
+  [[ -d $VENCORD_SRC/node_modules ]] && clean_item "Vencord build tools (dist/ stays)" "$(dir_bytes "$VENCORD_SRC/node_modules")" rm -rf "$VENCORD_SRC/node_modules"
+
+  step "Packages"
+  local orphans=()
+  mapfile -t orphans < <(pacman -Qdtq 2>/dev/null || true)
+  if ((${#orphans[@]})); then
+    info "Installed as dependencies, needed by nothing now: ${orphans[*]}"
+    clean_item "Remove these ${#orphans[@]} orphans" "$(pkg_bytes "${orphans[@]}")" sudo pacman -Rns --noconfirm "${orphans[@]}"
+  else
+    ok "No orphaned packages"
+  fi
+  local pkg retired=()
+  for pkg in "${RETIRED_PACKAGES[@]}"; do
+    pacman -Qq "$pkg" &>/dev/null || continue
+    [[ $(LC_ALL=C pacman -Qi "$pkg" | awk -F': *' '/^Required By/ { print $2 }') == None ]] || continue
+    retired+=("$pkg")
+  done
+  if ((${#retired[@]})); then
+    info "frameshell does its own thing instead of these now: ${retired[*]}"
+    info "Keep the ones you use yourself (answer no and remove the others by hand)"
+    clean_item "Remove them" "$(pkg_bytes "${retired[@]}")" sudo pacman -Rns --noconfirm "${retired[@]}"
+  fi
+
+  step "Logs, thumbnails, backups"
+  if [[ -d /var/log/journal ]]; then
+    local journal
+    journal=$(sudo -n du -sb /var/log/journal 2>/dev/null | awk '{ print $1 }' || true)
+    [[ -n $journal ]] || journal=$(dir_bytes /var/log/journal)
+    ((journal > 104857600)) && clean_item "System journal down to 100 MB" "$((journal - 104857600))" sudo journalctl --vacuum-size=100M
+  fi
+  [[ -d $HOME/.cache/thumbnails ]] && clean_item "File manager thumbnails (made again when needed)" "$(dir_bytes "$HOME/.cache/thumbnails")" rm -rf "$HOME/.cache/thumbnails"
+  local old=()
+  mapfile -t old < <(list_backups | tail -n +4)
+  if ((${#old[@]})); then
+    local paths=() b
+    for b in "${old[@]}"; do paths+=("$BACKUP_ROOT/$b"); done
+    clean_item "${#old[@]} older frame backups (the newest 3 stay)" "$(dir_bytes "${paths[@]}")" rm -rf "${paths[@]}"
+  fi
+
+  printf '\n%sDone.%s Freed about %s.\n\n' "$c_ok" "$c_reset" "$(human_bytes "$FREED")"
+}
+
 cmd_status() {
   header
   printf '  %s%-12s %-10s %s%s\n' "$c_muted" "PACKAGE" "CONFIG" "DEPENDENCIES" "$c_reset"
@@ -2393,6 +2532,7 @@ main() {
     layout) cmd_layout "${args[@]}" ;;
     __complete) cmd_complete "${args[@]}" ;;
     status | st | doctor) cmd_status ;;
+    clean) cmd_clean ;;
     help) usage ;;
     *) die "Unknown command: $cmd (try: frame help)" ;;
   esac
