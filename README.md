@@ -25,13 +25,16 @@ into its own shell.
 
 ## Install
 
+frameshell now lives in the [frame-shell](https://github.com/frame-shell) organization, one
+repo per part, so you only download what you use.
+
 ```bash
-git clone https://github.com/vxnsin/frameshell ~/frameshell
-~/frameshell/frame install
+curl -fsSL https://frame-shell.github.io/install.sh | bash
 ```
 
-It asks whether you want everything or pick the apps, which layout and which theme; a
-connected GoXLR gets its utility on its own.
+It asks for the full desktop or just the shell, then the apps one by one, the layout and the
+theme; a connected GoXLR gets its utility on its own. Installed from this repo before? Run
+`frame update`, then `frame migrate`.
 
 <p align="center">
   <img src=".github/install.svg" alt="frame install on a fresh CachyOS" width="100%">

@@ -1,15 +1,16 @@
 # The frame command
 
 ```bash
-git clone git@github.com:vxnsin/frameshell.git ~/frameshell
-~/frameshell/frame install
+curl -fsSL https://frame-shell.github.io/install.sh | bash
 ```
 
-`frame install` without package names starts the setup. It asks three things:
+That gets the CLI from [frame-shell/cli](https://github.com/frame-shell/cli) and starts
+`frame install`. Each part is its own repo in [frame-shell](https://github.com/frame-shell);
+only the ones you pick are downloaded. `frame install` without package names starts the setup:
 
-1. **How much:** *everything* (the shell plus Spotify, Vesktop, Zed, Dolphin, Zen and
-   Claude Code), *pick* (the shell, then a yes or no for each app) or *only the shell*
-   (terminal, prompt, bar, launcher, lockscreen, wallpapers).
+1. **How much:** the *full* desktop (shell, terminal and prompt) or *only the shell*, then the
+   apps: one by one, all of them (Spotify, Vesktop, Steam, Zed, Dolphin, Zen, Claude Code) or
+   none. `frame add <app>` gets one later.
 2. **Layout:** Hyprland's tiling with workspaces, or the infinite canvas (see
    [shell.md](shell.md#infinite-canvas)); `frame layout tiling|canvas` switches later.
 3. **Theme:** one of the six; `frame theme set <name>` switches later.
