@@ -17,8 +17,8 @@ into its own shell.
 - Tiling with workspaces, or an infinite canvas where windows float on an endless plane
 - A launcher that does more than apps: Spotify, Discord DMs, timers and alarms,
   emoji, files, ssh, clipboard, web search and Claude
-- Bridges to Discord (calls, voice joins, messages), the GoXLR and Spotify
-- Six themes for Ghostty, fish, Starship, Spotify, Vesktop, Zed, Dolphin, Zen, GRUB and the GoXLR's lights
+- Bridges to Discord (calls, voice joins, messages), Steam (its popups land in the shell), the GoXLR and Spotify
+- Six themes for Ghostty, fish, Starship, Spotify, Vesktop, Steam, Zed, Dolphin, Zen, GRUB and the GoXLR's lights
 - `frame`, one command to install, update and switch themes
 
 ## Install
@@ -56,7 +56,7 @@ frame status             # what is linked and what is missing
 frame login              # the lockscreen look as the login screen
 ```
 
-The details are in [docs](docs/): [the shell](docs/shell.md), [Spotify](docs/spotify.md), [themes](docs/themes.md)
+The details are in [docs](docs/): [the shell](docs/shell.md), [Spotify](docs/spotify.md), [Steam](docs/steam.md), [themes](docs/themes.md)
 and [the frame command](docs/frame.md).
 
 > Work in progress. Everything above is built, but none of it has run on Linux yet;

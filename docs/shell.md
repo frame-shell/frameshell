@@ -201,6 +201,9 @@ adds ShellBridge, builds it with pnpm, points Vesktop at that build (`vencordDir
 While the bridge is connected, Vesktop's own desktop notifications are dropped, so a DM
 shows up once. "open" and "call back" bring the Vesktop window to the front.
 
+Steam's popups (messages, invites, achievements, finished downloads) come through the
+Millennium plugin on `qs-steam.sock` the same way, see [Steam](steam.md).
+
 `frame install quickshell` also looks for mako, dunst and swaync (running, as a user
 service or in `exec-once`) and offers to turn them off, since only one program can
 receive notifications. `frame restore` brings them back.
