@@ -65,6 +65,7 @@ and [the frame command](docs/frame.md).
 
 > Work in progress. It runs on my CachyOS machine now, but it still has bugs and is not
 > ready for anyone else's desktop yet. The Steam part is the newest and has not run yet.
+> What to try and how: [TESTING.md](TESTING.md).
 
 Thanks to [system24](https://github.com/refact0r/system24) (the base of the Vesktop
 theme), [caelestia](https://github.com/caelestia-dots), [end-4's dots-hyprland](https://github.com/end-4/dots-hyprland)
