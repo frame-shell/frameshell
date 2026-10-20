@@ -59,8 +59,8 @@ frame login              # the lockscreen look as the login screen
 The details are in [docs](docs/): [the shell](docs/shell.md), [Spotify](docs/spotify.md), [themes](docs/themes.md)
 and [the frame command](docs/frame.md).
 
-> Work in progress. Everything above is built, but none of it has run on Linux yet;
-> that is the next step. After that: Steam through Millennium.
+> Work in progress. It runs on my CachyOS machine now, but it still has bugs and is not
+> ready for anyone else's desktop yet. Next: Steam through Millennium.
 
 Thanks to [system24](https://github.com/refact0r/system24) (the base of the Vesktop
 theme), [caelestia](https://github.com/caelestia-dots), [end-4's dots-hyprland](https://github.com/end-4/dots-hyprland)

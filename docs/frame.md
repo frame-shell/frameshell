@@ -50,9 +50,18 @@ manager) gets `greeter/frame-greeter-session` as its `default_session`: a small 
 `greeter/shell.qml`, clock, date and one password field for the one user of the machine.
 The files go to `/usr/share/frameshell/greeter` (the greeter user cannot read your home),
 together with the active theme; `greeter.json` there names the user and the session
-command (`/usr/bin/start-hyprland` on CachyOS). The original `/etc/greetd/config.toml` is
-kept in `~/.local/state/frameshell/`; `frame login remove` puts it back. To look at the
-greeter inside a running desktop: `qs -p ~/frameshell/greeter`.
+command (`/usr/bin/start-hyprland` on CachyOS). Before it touches greetd it checks that
+Quickshell and a compositor are there, it takes the config file greetd's service really
+reads, and afterwards it reads the file back. The original config is kept twice, in
+`~/.local/state/frameshell/` and as `config.toml.frameshell-orig` next to it;
+`frame login remove` puts it back and refuses to delete anything when neither copy exists.
+`frame status` says when greetd no longer starts the frameshell greeter (a package update
+can replace the config); `frame login` again fixes that.
+
+Trying it without a reboot: switch to a text console (Ctrl+Alt+F3), log in and run
+`sudo systemctl restart greetd`. The greeter logs to the journal
+(`journalctl -b -t frame-greeter -u greetd`). To look at it inside a running desktop:
+`qs -p ~/frameshell/greeter`.
 
 `frame grub` only works when the system boots with GRUB (`/boot/grub/grub.cfg` exists;
 the CachyOS installer also offers systemd-boot and Limine). It builds the fonts from

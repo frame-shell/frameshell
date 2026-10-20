@@ -5,7 +5,7 @@ Everything here runs in Quickshell (`quickshell/.config/quickshell`). Keys are s
 
 ## Hotkeys
 
-Hold Super for three seconds and an overlay lists every Hyprland bind: a German QWERTZ
+Hold Super for a second and a half and an overlay lists every Hyprland bind: a German QWERTZ
 keyboard with each key lit that does something with Super (a dot when only Super+Shift
 does), hovering a key says what it does, and below all binds grouped as shell, apps,
 windows, workspaces and media. Letting go of Super closes it. It stays closed while Super
@@ -162,10 +162,12 @@ Folders: `~/Pictures/wallpapers` and `assets/wallpapers`; Workshop items come fr
 `~/.local/share/Steam/steamapps/workshop/content/431960`. `frame install wallpaper` asks for
 the backend once; `frame wallpaper backend both|mpv|image` changes it later. Everything is
 kept in `~/.local/state/frameshell/wallpaper.json`. A screen without a wallpaper shows the
-theme's background color. Workshop items of the "web" kind (HTML wallpapers) are left out,
-linux-wallpaperengine cannot show them. The lockscreen blurs a still snapshot and freezes the backends
-while it is up (`frame-wallpaper pause`); after the unlock they run again, and one that
-stopped rendering is restarted (`resume`). Muted Wallpaper Engine scenes run without any
+theme's background color. Workshop items linux-wallpaperengine cannot show are left out:
+"web" ones (HTML), presets (only settings for another wallpaper) and gif scenes. The
+lockscreen blurs a still snapshot and freezes the backends while it is up
+(`frame-wallpaper pause`); after the unlock they run again, and Wallpaper Engine is always
+started anew, since it does not come back from a lock by itself (`resume`). A shell that
+starts while they are still frozen lets them run again. Muted Wallpaper Engine scenes run without any
 audio connection.
 
 ## Notifications and media
@@ -207,9 +209,9 @@ receive notifications. `frame restore` brings them back.
 
 ## Typing @
 
-Ctrl+Alt+Q types an @ into the focused window, for keyboards whose AltGr does not work. The
-sign goes out through a virtual keyboard (wtype) the moment Ctrl and Alt are released
-(`hypr/frame/shell.lua`).
+Ctrl+Alt+Q types an @ into the focused window, for keyboards whose AltGr does not work.
+Hyprland sends AltGr+Q straight to that window, so no virtual keyboard is involved and the
+layout in the bar stays as it is (`hypr/frame/shell.lua`).
 
 ## Screenshots
 

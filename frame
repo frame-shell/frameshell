@@ -982,6 +982,43 @@ cmd_goxlr() {
 # everything under /etc/greetd and /usr/share needs sudo.
 GREETD_CONFIG="/etc/greetd/config.toml"
 GREETER_DIR="/usr/share/frameshell/greeter"
+# Second copy of the original next to it, so `frame login remove` works even when the
+# state folder is gone
+GREETD_BACKUP_SUFFIX=".frameshell-orig"
+
+# The file greetd really reads: its unit may pass --config/-c (a distro drop-in)
+greetd_config_path() {
+  local exec_line path
+  exec_line=$(systemctl show -p ExecStart --value greetd.service 2>/dev/null || true)
+  path=$(sed -n 's/.*argv\[\]=[^;]*\(--config\|-c\)[ =]\([^ ;]*\).*/\2/p' <<<"$exec_line")
+  echo "${path:-/etc/greetd/config.toml}"
+}
+
+# What [default_session] command currently says
+greetd_default_command() {
+  awk '/^\[default_session\]/{s=1; next} /^\[/{s=0} s && /^[[:space:]]*command[[:space:]]*=/{sub(/^[^=]*=[[:space:]]*/, ""); gsub(/"/, ""); print; exit}' "$1"
+}
+
+# greetd has to be the display manager that systemd starts
+greetd_is_display_manager() {
+  local dm
+  dm=$(readlink -f /etc/systemd/system/display-manager.service 2>/dev/null || true)
+  [[ $dm == */greetd.service ]]
+}
+
+# Puts the original config back; with no copy at all it refuses, so greetd never
+# points at a greeter that is about to be deleted
+greetd_restore() {
+  local orig
+  for orig in "$STATE_DIR/greetd-config.orig" "$GREETD_CONFIG$GREETD_BACKUP_SUFFIX"; do
+    if [[ -s $orig ]]; then
+      run sudo install -m 644 "$orig" "$GREETD_CONFIG"
+      ok "Restored $GREETD_CONFIG from $orig"
+      return 0
+    fi
+  done
+  return 1
+}
 
 login_session_command() {
   # The command greetd runs for the session, the way the distro starts Hyprland
@@ -998,16 +1035,26 @@ cmd_login() {
   local action=${1:-install}
   need_arch
   header
+  GREETD_CONFIG=$(greetd_config_path)
   [[ -f $GREETD_CONFIG ]] || die "greetd is not the display manager here ($GREETD_CONFIG is missing); frame login only knows greetd"
   case $action in
     install)
-      local user command
+      local user command theme_file="$REPO/quickshell/.config/quickshell/config/Theme.qml"
       user=$(id -un)
       command=$(login_session_command)
+      # Everything the greeter needs, checked before greetd is touched: a broken greeter
+      # leaves only a text console to log in on
       if [[ ! -x /usr/bin/noctalia-greeter-compositor ]] && ! command -v cage >/dev/null; then
         die "The greeter needs a small compositor: noctalia-greeter (CachyOS) or cage (pacman -S cage)"
       fi
-      info "greetd will show the frameshell login screen for $user and start: $command"
+      command -v qs >/dev/null || die "Quickshell (qs) is missing; frame install quickshell first"
+      [[ -f $theme_file ]] || die "No rendered theme yet ($theme_file); run frame theme first"
+      greetd_is_display_manager \
+        || warn "systemd does not start greetd as the display manager; enable it: sudo systemctl enable greetd (after disabling the other one)"
+      local owner
+      owner=$(pacman -Qqo "$GREETD_CONFIG" 2>/dev/null || true)
+      [[ -n $owner ]] && info "$GREETD_CONFIG belongs to the package $owner; should an update replace it, run frame login again"
+      info "greetd ($GREETD_CONFIG) will show the frameshell login screen for $user and start: $command"
       confirm "Set up the lockscreen look as the login screen?" || exit 0
       step "Greeter files"
       run sudo install -d -m 755 "$GREETER_DIR" "$GREETER_DIR/ui"
@@ -1023,10 +1070,12 @@ cmd_login() {
       rm -f "$tmp"
       ok "Greeter in $GREETER_DIR (theme $(current_theme))"
       step "greetd"
-      if [[ ! -f $STATE_DIR/greetd-config.orig ]]; then
+      # Only the distro's own config counts as the original, never one frame wrote
+      if ! grep -q "frameshell" "$GREETD_CONFIG"; then
         run mkdir -p "$STATE_DIR"
         run cp "$GREETD_CONFIG" "$STATE_DIR/greetd-config.orig"
-        ok "Original config kept at $STATE_DIR/greetd-config.orig"
+        run sudo install -m 644 "$GREETD_CONFIG" "$GREETD_CONFIG$GREETD_BACKUP_SUFFIX"
+        ok "Original config kept at $STATE_DIR/greetd-config.orig and $GREETD_CONFIG$GREETD_BACKUP_SUFFIX"
       fi
       tmp=$(mktemp)
       # Keep [terminal] and any other section, replace default_session
@@ -1040,17 +1089,20 @@ cmd_login() {
       } >>"$tmp"
       run sudo install -m 644 "$tmp" "$GREETD_CONFIG"
       rm -f "$tmp"
+      if ((!DRY_RUN)) && [[ $(greetd_default_command "$GREETD_CONFIG") != "$GREETER_DIR/frame-greeter-session" ]]; then
+        die "$GREETD_CONFIG does not name the frameshell greeter after writing it; look at the file before rebooting"
+      fi
       ok "Wrote $GREETD_CONFIG (default_session → frameshell greeter)"
+      info "Try it without rebooting from a text console (Ctrl+Alt+F3): sudo systemctl restart greetd"
+      info "If it stays black: journalctl -b -t frame-greeter -u greetd, and frame login remove brings the old one back"
       printf '\n%sDone.%s The next boot shows the frameshell login screen. frame theme set … updates its colors too.\n\n' "$c_ok" "$c_reset"
       ;;
     remove)
       confirm "Back to the distro's greeter?" || exit 0
       step "greetd"
-      if [[ -f $STATE_DIR/greetd-config.orig ]]; then
-        run sudo install -m 644 "$STATE_DIR/greetd-config.orig" "$GREETD_CONFIG"
-        ok "Restored $GREETD_CONFIG"
-      else
-        warn "No saved original config; edit $GREETD_CONFIG by hand"
+      if ! greetd_restore; then
+        # Deleting the greeter now would leave greetd pointing at nothing
+        die "No copy of the original greetd config found; set [default_session] command in $GREETD_CONFIG back by hand (CachyOS: noctalia-greeter-session), then run frame login remove again"
       fi
       step "Greeter files"
       run sudo rm -rf "$GREETER_DIR"
@@ -1301,6 +1353,14 @@ theme_reload() {
   fi
   if [[ -d $GRUB_THEME_DIR ]]; then
     info "Boot menu: run frame grub to give GRUB the new colors (needs sudo)"
+  fi
+  # The login screen keeps its own copy of the theme in /usr/share
+  if [[ -d $GREETER_DIR ]] && ((!DRY_RUN)); then
+    if sudo -n install -m 644 "$REPO/quickshell/.config/quickshell/config/Theme.qml" "$GREETER_DIR/ui/Theme.qml" 2>/dev/null; then
+      ok "Login screen colors updated"
+    else
+      info "Login screen: run frame login to give it the new colors (needs sudo)"
+    fi
   fi
   return 0
 }
@@ -1809,6 +1869,17 @@ cmd_status() {
 
   if [[ -f /boot/grub/grub.cfg ]]; then
     [[ -d $GRUB_THEME_DIR ]] && ok "GRUB theme installed" || info "GRUB theme not installed (frame grub)"
+  fi
+
+  if [[ -d $GREETER_DIR ]]; then
+    local greetd_config
+    greetd_config=$(greetd_config_path)
+    if [[ -r $greetd_config && $(greetd_default_command "$greetd_config") == "$GREETER_DIR/frame-greeter-session" ]]; then
+      ok "Login screen: frameshell greeter ($greetd_config)"
+    else
+      warn "Login screen files are installed, but greetd ($greetd_config) starts something else; run frame login again"
+    fi
+    greetd_is_display_manager || warn "greetd is not the display manager systemd starts"
   fi
 
   local conflicts

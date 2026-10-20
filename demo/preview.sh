@@ -58,7 +58,8 @@ wait_new() {
 # (sx, sy) on the screen as it is now has the global canvas coordinate G(sx, sy); the
 # windows are laid out and the view glides in those coordinates, so a later camera does
 # not matter.
-read -r MX MY MW MH WS < <(hyprctl monitors -j | jq -r --arg m "$MON" '.[] | select(.name==$m) | "\(.x) \(.y) \(.width / .scale | floor) \(.height / .scale | floor) \(.activeWorkspace.id)"')
+# read fails on empty input, which set -e would turn into a silent exit
+read -r MX MY MW MH WS < <(hyprctl monitors -j | jq -r --arg m "$MON" '.[] | select(.name==$m) | "\(.x) \(.y) \(.width / .scale | floor) \(.height / .scale | floor) \(.activeWorkspace.id)"') || true
 [[ -n ${WS:-} ]] || { echo "monitor $MON not found" >&2; exit 1; }
 read -r CAMX CAMY < <(awk -v id="$WS" '$1 == id { print $2, $3; found = 1 } END { if (!found) print 0, 0 }' "$STATE" 2>/dev/null || echo "0 0")
 gx() { echo $((MX + CAMX + $1)); }
