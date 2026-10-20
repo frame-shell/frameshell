@@ -35,6 +35,7 @@ frame backup                 # snapshot configs and app settings
 frame restore                # list backups
 frame restore latest         # put the newest one back
 frame theme list             # themes; frame theme set <name> switches
+frame theme set              # without a name: pick one with the arrow keys
 frame grub                   # theme the GRUB boot menu (sudo)
 frame grub remove            # switch it off again
 frame login                  # the lockscreen look as the login screen (greetd, sudo)
@@ -69,6 +70,12 @@ JetBrains Mono, draws the frame images in the theme colors, copies everything to
 `/boot/grub/themes/frameshell`, sets `GRUB_THEME` in `/etc/default/grub` (the original is
 saved once to `~/.local/state/frameshell/`) and rebuilds `grub.cfg`. `frame update`
 refreshes an installed GRUB theme too.
+
+Questions with a choice (theme, layout, how much to set up) are menus: ↑↓ and Enter, or
+type the start of a name to jump to it, Esc to cancel. Piped into a script or with `-y`
+they fall back to plain numbered questions. Tab completes commands, packages, themes and
+backups in fish and bash (`completions/`, linked by `frame install` and `frame update`;
+bash needs the bash-completion package).
 
 Backups live in `~/.local/state/frameshell/backup/` (one folder per snapshot, named by date
 and reason). `install` moves conflicting configs there, `update` and `restore` take a

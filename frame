@@ -150,12 +150,88 @@ confirm() {
 
 # choose <question> <key|description>...: prints the picked key; the first is the default.
 # The menu goes to stderr, so the answer can be captured with $(…).
+# Arrow-key menu for a terminal: ↑↓ move, Enter takes it, typing jumps to the option that
+# starts with what was typed ("sa" → sakura), a digit takes that option, Esc cancels
+# (exit code 1, nothing printed). Options are "id|description"; the menu is drawn on
+# stderr so the answer can be captured: id=$(menu "Question?" <start index> "${opts[@]}")
+menu() {
+  local question=$1 sel=${2:-0}
+  shift 2
+  local opts=("$@") n=$# i id desc key rest attempt typed="" drawn=0
+  ((sel >= 0 && sel < n)) || sel=0
+  printf '  %s\n' "$question" >&2
+  printf '  %s↑↓ move · enter pick · type to jump · esc cancel%s\n' "$c_muted" "$c_reset" >&2
+  printf '\e[?25l' >&2
+  # The cursor has to come back even on Ctrl+C
+  trap 'printf "\e[?25h\n" >&2; exit 130' INT
+  while :; do
+    ((drawn)) && printf '\e[%dA' "$n" >&2
+    drawn=1
+    for ((i = 0; i < n; i++)); do
+      id=${opts[i]%%|*}
+      desc=${opts[i]#*|}
+      if ((i == sel)); then
+        printf '\r\e[K  %s❯%s %s%-11s%s %s\n' "$c_primary" "$c_reset" "$c_bold" "$id" "$c_reset" "$desc" >&2
+      else
+        printf '\r\e[K    %s%-11s%s %s\n' "$c_muted" "$id" "$c_reset" "$desc" >&2
+      fi
+    done
+    IFS= read -rsn1 key || key=$'\e'
+    case $key in
+      "") break ;;
+      $'\e')
+        rest=""
+        IFS= read -rsn2 -t 0.05 rest || true
+        case $rest in
+          "[A") sel=$(((sel - 1 + n) % n)); typed="" ;;
+          "[B") sel=$(((sel + 1) % n)); typed="" ;;
+          "")
+            trap - INT
+            printf '\e[?25h' >&2
+            return 1
+            ;;
+        esac
+        ;;
+      [1-9])
+        if ((key <= n)); then
+          sel=$((key - 1))
+          break
+        fi
+        ;;
+      *)
+        # Type-ahead: the longest typed prefix that still matches, else start again
+        typed+=${key,,}
+        for attempt in "$typed" "${key,,}"; do
+          for ((i = 0; i < n; i++)); do
+            id=${opts[i]%%|*}
+            if [[ ${id,,} == "$attempt"* ]]; then
+              sel=$i
+              typed=$attempt
+              continue 3
+            fi
+          done
+        done
+        typed=""
+        ;;
+    esac
+  done
+  trap - INT
+  printf '\e[?25h' >&2
+  echo "${opts[sel]%%|*}"
+}
+
 choose() {
   local question=$1 answer="" i=1 opt
   shift
   local opts=("$@")
   if ((ASSUME_YES)); then
     echo "${opts[0]%%|*}"
+    return 0
+  fi
+  # In a terminal: the arrow-key menu; Esc there means the first option, like Enter on
+  # the numbered prompt below (piped input, logs)
+  if [[ -t 0 && -t 2 ]]; then
+    menu "$question" 0 "${opts[@]}" || echo "${opts[0]%%|*}"
     return 0
   fi
   printf '  %s\n' "$question" >&2
@@ -184,7 +260,7 @@ usage() {
     restore [name|latest] list backups, or put one back
     theme                 write every app color file from the active theme
     theme list            show the themes, the active one marked
-    theme set <name>      switch every app to another theme
+    theme set [name]      switch every app to another theme (no name: pick one with the arrow keys)
     theme check           only report files that are out of date
     grub [install|remove] theme the GRUB boot menu (copies to /boot, needs sudo)
     goxlr                 faders, buttons and animation of the GoXLR in the theme's colors
@@ -401,10 +477,43 @@ list_backups() {
 
 link_self() {
   local bin="$HOME/.local/bin/frame"
-  [[ "$(readlink -f "$bin" 2>/dev/null)" == "$REPO/frame" ]] && return 0
-  run mkdir -p "$HOME/.local/bin"
-  run ln -sf "$REPO/frame" "$bin"
-  ok "frame is now available as a command (~/.local/bin/frame)"
+  if [[ "$(readlink -f "$bin" 2>/dev/null)" != "$REPO/frame" ]]; then
+    run mkdir -p "$HOME/.local/bin"
+    run ln -sf "$REPO/frame" "$bin"
+    ok "frame is now available as a command (~/.local/bin/frame)"
+  fi
+  link_completions
+}
+
+# Tab completion for fish and bash (completions/); both ask `frame __complete` for the lists
+link_completions() {
+  local fish_dir="${XDG_CONFIG_HOME:-$HOME/.config}/fish/completions"
+  local bash_dir="${XDG_DATA_HOME:-$HOME/.local/share}/bash-completion/completions"
+  local linked=0
+  if [[ "$(readlink -f "$fish_dir/frame.fish" 2>/dev/null)" != "$REPO/completions/frame.fish" ]]; then
+    run mkdir -p "$fish_dir"
+    run ln -sf "$REPO/completions/frame.fish" "$fish_dir/frame.fish"
+    linked=1
+  fi
+  if [[ "$(readlink -f "$bash_dir/frame" 2>/dev/null)" != "$REPO/completions/frame.bash" ]]; then
+    run mkdir -p "$bash_dir"
+    run ln -sf "$REPO/completions/frame.bash" "$bash_dir/frame"
+    linked=1
+  fi
+  ((linked)) && ok "Tab completion for frame in fish and bash (new shells)"
+  return 0
+}
+
+# Lists for the completions: frame __complete commands|packages|installed|themes|backups
+cmd_complete() {
+  case ${1:-} in
+    commands) printf '%s\n' install update remove backup restore theme grub goxlr login wallpaper spotify layout status help ;;
+    packages) printf '%s\n' "${PACKAGES[@]}" ;;
+    installed) installed_packages ;;
+    themes) theme_ids ;;
+    backups) list_backups ;;
+  esac
+  return 0
 }
 
 run_post() {
@@ -1389,6 +1498,27 @@ theme_list() {
   info "Switch with: frame theme set <name>"
 }
 
+# frame theme set without a name: every theme with its colors, the active one selected
+theme_pick() {
+  local id desc swatch r h i=0 start=0 cur opts=()
+  cur=$(current_theme)
+  for id in $(theme_ids); do
+    desc=$(sed -n 's/.*"description": *"\([^"]*\)".*/\1/p' "$REPO/themes/$id.json" | head -n 1)
+    swatch=""
+    if ((USE_COLOR)); then
+      for r in bg surface2 primary secondary accent text; do
+        h=$(theme_hex "$id" "$r")
+        [[ -n $h ]] && swatch+="$(bg_hex "$h")  "
+      done
+      swatch+="$c_reset "
+    fi
+    [[ $id == "$cur" ]] && start=$i
+    opts+=("$id|$swatch$c_muted$desc$c_reset")
+    i=$((i + 1))
+  done
+  menu "Which theme? (now: $cur)" "$start" "${opts[@]}"
+}
+
 theme_set() {
   local id=$1
   is_theme "$id" || die "Unknown theme: $id (available: $(theme_ids | tr '\n' ' '))"
@@ -1410,9 +1540,16 @@ cmd_theme() {
       theme_reload
       ;;
     list | ls) theme_list ;;
-    set | use)
-      [[ -n ${2:-} ]] || die "Name a theme: frame theme set <name> (see: frame theme list)"
-      theme_set "$2"
+    set | use | pick)
+      if [[ -n ${2:-} ]]; then
+        theme_set "$2"
+      elif [[ -t 0 && -t 2 ]]; then
+        local picked
+        picked=$(theme_pick) || exit 0
+        theme_set "$picked"
+      else
+        die "Name a theme: frame theme set <name> (see: frame theme list)"
+      fi
       ;;
     check)
       header
@@ -1745,6 +1882,8 @@ cmd_update() {
   if ((${#requested[@]} == 0)) && [[ -d $GRUB_THEME_DIR ]] && command -v grub-mkconfig >/dev/null; then
     grub_apply
   fi
+  # New in a later version: completions that an older install never linked
+  link_completions
   printf '\n%sDone.%s\n\n' "$c_ok" "$c_reset"
 }
 
@@ -1936,6 +2075,7 @@ main() {
     wallpaper | wp) cmd_wallpaper "${args[@]}" ;;
     spotify) cmd_spotify "${args[@]}" ;;
     layout) cmd_layout "${args[@]}" ;;
+    __complete) cmd_complete "${args[@]}" ;;
     status | st | doctor) cmd_status ;;
     help) usage ;;
     *) die "Unknown command: $cmd (try: frame help)" ;;
