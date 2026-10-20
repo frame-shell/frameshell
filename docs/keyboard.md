@@ -1,7 +1,8 @@
 # AULA F75 on Linux
 
-`frame-keyboard` sets the F75's lighting and Fn keys without the Windows app. It is not part
-of `frame` or the shell yet; the protocol below has to prove itself on the real board first.
+`frame-keyboard` sets the F75's lighting and Fn keys without the Windows app, and the shell
+has an app for it (Super+K). `frame install` does not set it up yet; the protocol below has
+to prove itself on the real board first.
 Everything here was worked out from the vendor software and other people's notes.
 **Nothing has been sent to a keyboard yet.**
 
@@ -37,6 +38,27 @@ RAM, and from step 5 on the changes go to flash. Each of those writes saves the 
 7. `frame-keyboard colors --all off w=red a=red s=red d=red --live`, then `style split --live`.
 
 Without `--live`, every command prints the packets it would send and stops there.
+
+## The app (Super+K)
+
+Super+K, or *keyboard ›* in the control center, opens the keyboard app. It shows the F75 as a
+map with QWERTZ labels and has three tabs:
+
+- **lighting**: pick an effect, then set brightness 0–9, speed 0–4 and a color. The color is a
+  factory slot, multi, a theme color or `#rrggbb`. *apply* writes it.
+- **fn keys**: pick the layer (with fn, fn 2, without fn), click a key and type what it should
+  do (`f5`, `ctrl+alt+t`, `super+z`, read as QWERTZ) or pick a media or lighting action.
+  *factory* puts the AULA default back. Lit keys already do something on that layer, and fn
+  itself cannot be changed.
+- **colors**: pick a color (theme roles, a few fixed ones, `#rrggbb`) and click keys to paint
+  them. *fill all* paints every key, and *solid*, *split* and *rows* are the theme styles.
+  *write colors* saves them on the keyboard as the Self-define effect.
+
+The app calls `frame-keyboard`, so that has to be in `~/.local/bin` (see above). It starts as
+a **dry run**: it shows placeholder data, and the log at the bottom shows the packets it would
+have sent. The *dry run* button switches to live until the shell restarts. Once the test
+order above works, set `keyboardLive: true` in `quickshell/.config/quickshell/config/Config.qml`
+to start live every time.
 
 ## Hardware
 

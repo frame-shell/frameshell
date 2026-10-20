@@ -43,6 +43,7 @@ connected GoXLR gets its utility on its own.
 | Super+V | clipboard history |
 | Super+C | control center |
 | Super+W | wallpapers |
+| Super+K | keyboard: lighting, Fn keys, key colors (AULA F75, not tested on the board yet) |
 | Super+L | lock |
 | Print, Shift+Print | screenshot: region or window, whole screen |
 | Super+wheel | zoom out to every window (canvas layout) |
