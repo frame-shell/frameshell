@@ -26,6 +26,21 @@ takes the colors.
 After `frame theme set …` restart Steam for the new colors. If something looks off after a
 Steam update, open Millennium's developer tools and adjust `frameshell.css`.
 
+## Library colors
+
+Steam's library, downloads and settings pages are styled in Steam's own `sp.css` and
+`library.css` with hashed class names that change with every update, and with literal colors
+instead of design tokens, so no theme can name them. `frame-steam-css` (steam package, in
+`~/.local/bin`) reads the installed Steam's CSS and writes `generated.css` next to the theme:
+for every rule that paints one of Steam's colors, the same selector with the theme's variable.
+Greys are sorted by brightness into the theme's surfaces and text colors, Steam's blues,
+greens, oranges and reds become the matching accent, other saturated colors (collection
+labels, art tints), translucent overlays and fades over art are left alone.
+
+`frame theme` and `frame update steam` run it; after a Steam update that changed the class
+names, run `frame-steam-css` and restart Steam. Without the file the theme still applies, the
+library just keeps Steam's colors.
+
 ## Notifications
 
 The plugin (`steam/.local/share/millennium/plugins/frameshell`) connects to the shell on
