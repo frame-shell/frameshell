@@ -20,6 +20,13 @@ Windows over each other: Alt+Tab goes to the next window and brings it up, Super
 the active window to the back, Super+Alt+S puts it into the scratchpad and Super+S shows and
 hides the scratchpad (Super+Shift+S is the screenshot).
 
+Steam games and gamescope run on a workspace of their own (the distro's rule, `name:gaming`)
+and the screen switches to it, so the desktop is out of sight while a game runs. Super+Tab
+goes back to the desktop and to the games again. With several games open, Alt+Tab goes from
+one to the next (the focused one takes the fullscreen), and Enter on a running game in the
+launcher shows that one. A game that leaves fullscreen off the screen comes into view on its
+own.
+
 The list is read live from `hyprctl binds`. Give your own binds a description to name
 them, optionally with a group: `{ description = "media · next song" }`.
 
