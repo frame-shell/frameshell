@@ -99,6 +99,13 @@ Keep a text console in mind (Ctrl+Alt+F3): it always lets you log in and undo th
 - [ ] Mute a channel, "export": `<name>-edit.mp4` plays with the cuts, blur and picture and
       without the muted channel. If not: the error in the inspector, or `qs log | grep -i editor`
 - [ ] A channel that is off: drag "sync" until the mic matches the picture
+- [ ] Screenshot, "edit" in the notification: the picture editor; `b`, drag the box over a
+      name, `c` and pull a corner, Ctrl+S: `<name>-edit.png` is blurred and cropped
+- [ ] Super+G: screenshots and recordings in one grid, videos with a thumbnail and their length
+- [ ] Ctrl+click three, "delete 3", "yes, delete": gone from the grid, in the trash with their
+      `.tracks` folders (Dolphin: trash:/)
+- [ ] Drop a folder with pictures on the media window: they show up; × under the grid takes it out
+- [ ] Dolphin, right click a video: "Open with → frameshell editor"
 
 ## 7. GTK apps
 

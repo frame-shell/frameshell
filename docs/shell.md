@@ -280,6 +280,27 @@ copy. The editor needs Qt Multimedia (`qt6-multimedia-ffmpeg`, offered by `frame
 without it the shell says so and everything else keeps working). Files: `editor/`,
 `quickshell/.local/bin/frame-record-mix` (tracks).
 
+### Picture editor
+
+"edit" on a screenshot's notification opens it in the same window, without the timeline:
+`b` adds a blur box (blur or pixelate, strength), pictures dragged in from Dolphin go on top,
+`c` crops (drag the frame or its corners). The edit is kept as `<name>.edit.json`, "export"
+(Ctrl+S) writes `<name>-edit.png` and the notification copies it as a picture for chats.
+In Dolphin both editors are under "Open with → frameshell editor" for any picture or video
+(`quickshell/.local/share/applications/frameshell-editor.desktop`).
+
+### Media
+
+Super+G (or "frameshell media" in the launcher, `qs ipc call media toggle`) shows every
+screenshot and recording as a grid, newest first, with filters for pictures, videos and edited
+ones. Click picks one, Ctrl+click more, Shift+click a run, Ctrl+A all of them; double click or
+Enter opens it in the editor. "copy" puts one picture in as the picture and anything else as
+files, "delete" asks in place and moves them into the trash together with a recording's
+`.tracks` folder and an `.edit.json` (`gio trash`). A folder dropped on the window joins the
+grid (kept in `~/.local/state/quickshell/…/media.json`, × takes it out again). Video thumbnails
+come from ffmpeg and are cached in `~/.cache/frameshell/media`. Files: `gallery/`,
+`quickshell/.local/bin/frame-media`.
+
 ## Lockscreen
 
 Super+L (or `qs ipc call lock lock`, or 10 idle minutes, or going to sleep) takes a snapshot of
