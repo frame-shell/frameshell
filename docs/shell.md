@@ -259,6 +259,27 @@ sink that wf-recorder records (`frame-record-mix`, PipeWire null sink and loopba
 when the recording ends). The choice is kept in `~/.local/state/frameshell/record-audio.json`
 (`services/Recorder.qml`, `qs ipc call screenshot record`).
 
+### Recording editor
+
+"edit" on a recording's notification (or `qs ipc call editor open <video>`) opens it in the
+editor, a window of its own. Every channel chosen in the audio panel was also recorded on its
+own (`<recording>.tracks/`, one FLAC per channel via parecord), so each gets its own row with a
+waveform, a level and mute; a recording without channels has one row for its own sound.
+
+- `c` cuts at the playhead, a click on a piece and `del` takes it out, the rest closes up
+- `b` adds a blur box: drag it over names or messages, pick blur or pixelate and the strength,
+  and drag its bar in the timeline to set from when to when
+- pictures dragged in from Dolphin land where they are dropped; move them, pull the corner to
+  size them, set their opacity
+- a channel that sounds a little early or late gets nudged with "sync" (± half a second)
+- `space` plays, ←/→ steps a second (Shift: five), Ctrl+wheel zooms the timeline, Ctrl+Z undoes
+
+Nothing touches the recording itself: the edit is kept next to it as `<recording>.edit.json`
+and "export" writes `<recording>-edit.mp4` with ffmpeg; the notification offers open, folder and
+copy. The editor needs Qt Multimedia (`qt6-multimedia-ffmpeg`, offered by `frame install`;
+without it the shell says so and everything else keeps working). Files: `editor/`,
+`quickshell/.local/bin/frame-record-mix` (tracks).
+
 ## Lockscreen
 
 Super+L (or `qs ipc call lock lock`, or 10 idle minutes, or going to sleep) takes a snapshot of

@@ -89,6 +89,16 @@ Keep a text console in mind (Ctrl+Alt+F3): it always lets you log in and undo th
 - [ ] Super+Shift+R again (or a click on `● rec`): "recording saved", the file in
       `~/Videos/recordings` (or your XDG videos folder) plays
 - [ ] "copy" in the notification, then paste in Discord: the video is attached
+- [ ] With two channels on in the audio panel: next to the video a `.tracks` folder with one
+      `.flac` per channel and `tracks.json` (`ls ~/Videos/recordings/*.tracks`)
+- [ ] "edit" in the notification (needs `sudo pacman -S qt6-multimedia-ffmpeg`): the editor
+      window shows the video and one waveform row per channel; space plays with sound
+- [ ] `c` at two places, click the middle piece, `del`: it is gone and playback jumps over it
+- [ ] `b`, drag the box over something and play: it is blurred; "pixelate" turns it into blocks
+- [ ] Drag a picture from Dolphin onto the preview, move it, pull its corner
+- [ ] Mute a channel, "export": `<name>-edit.mp4` plays with the cuts, blur and picture and
+      without the muted channel. If not: the error in the inspector, or `qs log | grep -i editor`
+- [ ] A channel that is off: drag "sync" until the mic matches the picture
 
 ## 7. GTK apps
 
