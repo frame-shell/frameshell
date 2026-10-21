@@ -246,8 +246,13 @@ cursor, the label says which and how big), Enter or a click on empty desktop tak
 whole screen, Esc or a right click cancels. Shift+Print and Super+Print take the focused
 screen right away. The picture goes to `~/Pictures/screenshots` (your XDG pictures
 folder, here `~/Bilder/screenshots`) and into the clipboard, and a notification shows it
-with "open", "folder" and "delete". grim takes the picture, wl-copy fills the clipboard
+with "open", "edit", "folder" and "delete". grim takes the picture, wl-copy fills the clipboard
 (`screenshot/Screenshot.qml`, `qs ipc call screenshot region|screen`).
+
+The freeze is real: Print takes every screen first (grim, into `$XDG_RUNTIME_DIR/frame-shot`),
+the picker shows exactly those pictures and the shot is cut out of them with ffmpeg. An open
+menu, a tooltip or a video frame is in the shot as it was when the key was pressed, and the
+picker itself never is. Without ffmpeg it falls back to taking the region live.
 
 Super+Shift+R records instead: the same picker in red, then wf-recorder records the region,
 window or screen until you stop it, with the same key or a click on `● rec` in the bar. The video

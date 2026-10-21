@@ -83,6 +83,14 @@ Keep a text console in mind (Ctrl+Alt+F3): it always lets you log in and undo th
 - [ ] With `goxlrGameProfile` set: the GoXLR loads that profile and the old one afterwards
       (never tried on a real GoXLR)
 
+## 5b. Screenshots
+
+- [ ] Open a right-click menu, Print, drag a region over it: the menu is in the shot
+- [ ] A video playing, Print, wait a few seconds, click: the shot shows the frame from the key
+      press, not from the click
+- [ ] Two monitors: a region on the second one is cut from the right screen and sharp
+      (`ls $XDG_RUNTIME_DIR/frame-shot` is empty afterwards)
+
 ## 6. Screen recording
 
 - [ ] Super+Shift+R, drag a region: the picker is red, then `● rec 0:01` counts in the bar
