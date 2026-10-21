@@ -147,6 +147,15 @@ Keep a text console in mind (Ctrl+Alt+F3): it always lets you log in and undo th
 - Black screen or the old login? `journalctl -b -t frame-greeter -u greetd`, and
   `frame login remove` brings the distro's greeter back
 
+## 9b. Settings
+
+- [ ] Super+, (and "settings ›" in the control center): the window with seven sections
+- [ ] look: click another theme, the whole desktop changes; click "canvas", then "tiling"
+- [ ] shell: "lock when idle" to 1 min, wait: the lockscreen comes; "default" puts it back
+      (`cat ~/.config/frameshell/shell.json` shows only what you changed)
+- [ ] sound: pick another output, music moves there
+- [ ] apps: "add" on a module that is missing opens a terminal with `frame add`
+
 ## 10. Steam
 
 - [ ] `frame install steam`, start Steam: the Frameshell theme is on (Steam → Millennium)

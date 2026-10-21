@@ -47,6 +47,7 @@ theme; a connected GoXLR gets its utility on its own. Installed from this repo b
 | Super+Space | launcher |
 | Super+V | clipboard history |
 | Super+C | control center |
+| Super+, | settings: theme, layout, lock, sound, modules, system |
 | Super+W | wallpapers |
 | Super+K | keyboard: lighting, Fn keys, key colors (AULA F75, not tested on the board yet) |
 | Super+G | media: screenshots and recordings, edit, delete many at once |

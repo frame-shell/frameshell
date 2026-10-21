@@ -65,7 +65,7 @@ wrote since Discord started; before that, to your most recent DM, and the info p
 
 **Claude** shows up only when the `claude` CLI is installed and signed in. It runs in an
 empty folder (`~/.local/state/frameshell/claude`), so no project files go along. Model and
-on/off: `claudeModel` and `claudeEnabled` in `config/Config.qml`, next to the web search
+on/off: `claudeModel` and `claudeEnabled` in the settings app (or `config/Config.qml`), next to the web search
 engines, the file search folder and the snooze length.
 
 ## Infinite canvas
@@ -129,7 +129,7 @@ on the number opens Ghostty with the update and `frame update` afterwards, and t
 is checked again when that window closes.
 
 **Game mode** switches itself on while a game runs: Steam games (window class
-`steam_app_<id>`), gamescope, and the classes in `gameClasses` in `config/Config.qml`.
+`steam_app_<id>`), gamescope, and the classes in `gameClasses` in the settings app (or `config/Config.qml`).
 It turns animations and blur off, sets the performance power profile, silences popups
 (calls and alarms still come through), pauses the wallpaper and, with `goxlrGameProfile`
 set, loads that GoXLR profile. When the last game closes, everything goes back, the
@@ -155,7 +155,7 @@ per app. From six apps on the rows get compact, idle apps are dimmed at the bott
 GoXLR notes: levels and mutes come from the goxlr-utility HTTP API
 (`http://localhost:14564`). The mixer finds the GoXLR devices by their PipeWire
 description; if yours are named differently (`wpctl status`), change `goxlrOutputs` and
-`goxlrInputs` in `config/Config.qml`.
+`goxlrInputs` in the settings app (or `config/Config.qml`).
 
 On a GoXLR Mini the System channel has no fader: the control center shows a slider for it,
 and the volume in the bar is that channel; scrolling on it changes it in steps of 5 %
@@ -309,6 +309,29 @@ grid (kept in `~/.local/state/quickshell/…/media.json`, × takes it out again)
 come from ffmpeg and are cached in `~/.cache/frameshell/media`. Edits and tracks whose file was
 deleted somewhere else (in Dolphin) show up as "clean up N leftovers" next to the filters. Files: `gallery/`,
 `quickshell/.local/bin/frame-media`.
+
+## Settings
+
+Super+, (or "settings ›" in the control center, `qs ipc call settings toggle`) opens the
+settings in a window of their own:
+
+- **look**: the theme (every app, the boot screen and the keyboard follow), tiling or the
+  infinite canvas, the wallpaper app, the lockscreen blur
+- **shell**: lock and screens off when idle, how long notifications stay and how many at once,
+  the weather's city
+- **launcher**: the web search engine, Claude on or off and its model, where file search
+  looks, snooze length
+- **games**: game mode by itself, quiet while playing, other games by window class, a GoXLR
+  profile while playing
+- **sound**: the default output and microphone
+- **apps**: every module with update or add, the Spotify Web API, the keyboard app and its
+  live switch, the GoXLR's lights
+- **system**: updates, boot splash, login screen, `frame status` and `frame clean`, versions
+
+What you change lands in `~/.config/frameshell/shell.json`, only the values that differ;
+"default" next to one takes it back. The file survives every update, and editing it by hand
+works too (`config/Config.qml` holds the defaults and what each one does). Anything that needs
+sudo (adding modules, boot, login, updates) opens in a terminal.
 
 ## Lockscreen
 
