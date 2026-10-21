@@ -274,9 +274,11 @@ waveform, a level and mute; a recording without channels has one row for its own
 - a channel that sounds a little early or late gets nudged with "sync" (± half a second)
 - `space` plays, ←/→ steps a second (Shift: five), Ctrl+wheel zooms the timeline, Ctrl+Z undoes
 
-Nothing touches the recording itself: the edit is kept next to it as `<recording>.edit.json`
-and "export" writes `<recording>-edit.mp4` with ffmpeg; the notification offers open, folder and
-copy. The editor needs Qt Multimedia (`qt6-multimedia-ffmpeg`, offered by `frame install`;
+Nothing touches the recording itself: once something is changed, the edit is kept next to it
+as `<recording>.edit.json`, and "export" writes `<recording>-edit.mp4` with ffmpeg; the
+notification offers open, folder and copy. "export & delete raw" asks once, exports, then moves
+the recording, its `.tracks` folder and the edit into the trash, so only the finished video
+stays. The editor needs Qt Multimedia (`qt6-multimedia-ffmpeg`, offered by `frame install`;
 without it the shell says so and everything else keeps working). Files: `editor/`,
 `quickshell/.local/bin/frame-record-mix` (tracks).
 
@@ -286,6 +288,7 @@ without it the shell says so and everything else keeps working). Files: `editor/
 `b` adds a blur box (blur or pixelate, strength), pictures dragged in from Dolphin go on top,
 `c` crops (drag the frame or its corners). The edit is kept as `<name>.edit.json`, "export"
 (Ctrl+S) writes `<name>-edit.png` and the notification copies it as a picture for chats.
+"export & delete original" does the same and moves the original into the trash.
 In Dolphin both editors are under "Open with → frameshell editor" for any picture or video
 (`quickshell/.local/share/applications/frameshell-editor.desktop`).
 
@@ -298,7 +301,8 @@ Enter opens it in the editor. "copy" puts one picture in as the picture and anyt
 files, "delete" asks in place and moves them into the trash together with a recording's
 `.tracks` folder and an `.edit.json` (`gio trash`). A folder dropped on the window joins the
 grid (kept in `~/.local/state/quickshell/…/media.json`, × takes it out again). Video thumbnails
-come from ffmpeg and are cached in `~/.cache/frameshell/media`. Files: `gallery/`,
+come from ffmpeg and are cached in `~/.cache/frameshell/media`. Edits and tracks whose file was
+deleted somewhere else (in Dolphin) show up as "clean up N leftovers" next to the filters. Files: `gallery/`,
 `quickshell/.local/bin/frame-media`.
 
 ## Lockscreen

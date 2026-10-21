@@ -106,6 +106,11 @@ Keep a text console in mind (Ctrl+Alt+F3): it always lets you log in and undo th
       `.tracks` folders (Dolphin: trash:/)
 - [ ] Drop a folder with pictures on the media window: they show up; × under the grid takes it out
 - [ ] Dolphin, right click a video: "Open with → frameshell editor"
+- [ ] Open a recording in the editor and close it without changing anything: no `.edit.json`
+      appears next to it
+- [ ] "export & delete raw", "yes": the editor closes, `<name>-edit.mp4` stays, the recording
+      and its `.tracks` folder are in the trash
+- [ ] Delete a recording in Dolphin, Super+G: "clean up 2 leftovers" takes its edit and tracks
 
 ## 7. GTK apps
 
