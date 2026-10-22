@@ -8,7 +8,9 @@ const path = require('path');
 
 const root = path.resolve(__dirname, '..', '..');
 const order = ['periwinkle', 'sakura', 'matcha', 'ember', 'lagoon', 'mono'];
-const themes = order.map(id => Object.assign({ id }, JSON.parse(fs.readFileSync(path.join(root, 'themes', id + '.json'), 'utf8'))));
+// The themes live in frame-shell/cli; an installed frame command has them, FRAME_THEMES points elsewhere
+const themeDir = process.env.FRAME_THEMES || path.join(require('os').homedir(), '.local/share/frameshell/cli/themes');
+const themes = order.map(id => Object.assign({ id }, JSON.parse(fs.readFileSync(path.join(themeDir, id + '.json'), 'utf8'))));
 const font = "ui-monospace, 'JetBrains Mono', SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace";
 const roles = Object.keys(themes[0].colors);
 
@@ -165,7 +167,7 @@ function installSvg() {
   const c = themes[0].colors;
   const lines = [
     [['frame', '┌['], ['secondary', '~'], ['frame', ']']],
-    [['frame', '└─'], ['primary', '❯ '], ['text', 'git clone https://github.com/vxnsin/frameshell ~/frameshell && ~/frameshell/frame install']],
+    [['frame', '└─'], ['primary', '❯ '], ['text', 'curl -fsSL https://frame-shell.github.io/install.sh | bash']],
     [],
     [['primary', '  frame  '], ['muted', 'frameshell · CachyOS · Hyprland']],
     [['muted', '  Packages: ghostty fish starship fastfetch spicetify vencord quickshell hypr wallpaper zed dolphin zen']],
